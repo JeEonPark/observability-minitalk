@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minitalk-backend
+  labels:
+    app: minitalk-backend
+    component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minitalk-backend
+  template:
+    metadata:
+      labels:
+        app: minitalk-backend
+    spec:
+      containers:
+      - name: backend
+        image: minitalk-backend:latest
+        imagePullPolicy: Never  # For local development
+        ports:
+        - containerPort: 4000
+          name: http
+        env:
+        - name: MONGO_URL
+          value: "mongodb://mongodb:27017/chatapp"
+        - name: JWT_SECRET
+          value: "your-secret-key-change-in-production"
+        - name: PORT
+          value: "4000"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 4000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 4000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minitalk-backend
+  labels:
+    app: minitalk-backend
+spec:
+  ports:
+  - port: 4000
+    targetPort: 4000
+    name: http
+  selector:
+    app: minitalk-backend 
