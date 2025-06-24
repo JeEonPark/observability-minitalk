@@ -92,4 +92,67 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// MEGA BATCH LOGIN for ULTRA SPEED! 🔑🚀
+router.post('/login-batch', async (req, res) => {
+  try {
+    const { users } = req.body;
+
+    if (!users || !Array.isArray(users) || users.length === 0) {
+      return res.status(400).json({ error: 'Users array is required' });
+    }
+
+    // Validate all users have required fields
+    for (const user of users) {
+      if (!user.username || !user.password) {
+        return res.status(400).json({ error: 'All users must have username and password' });
+      }
+    }
+
+    const results = [];
+    const errors = [];
+
+    // Process all logins in batch
+    for (const userData of users) {
+      try {
+        // Find user using dataManager
+        const user = await dataManager.findUserByUsername(userData.username);
+        if (!user) {
+          errors.push({ username: userData.username, error: 'User not found' });
+          continue;
+        }
+
+        // Check password using dataManager
+        const isValidPassword = await dataManager.comparePassword(userData.password, user.password);
+        if (!isValidPassword) {
+          errors.push({ username: userData.username, error: 'Invalid password' });
+          continue;
+        }
+
+        // Generate JWT token
+        const token = jwt.sign(
+          { username: user.username },
+          JWT_SECRET,
+          { expiresIn: '24h' }
+        );
+
+        results.push({
+          username: user.username,
+          token: token
+        });
+      } catch (error) {
+        errors.push({ username: userData.username, error: error.message });
+      }
+    }
+
+    res.json({
+      message: `Batch login completed: ${results.length} successful, ${errors.length} errors`,
+      results: results,
+      errors: errors
+    });
+  } catch (error) {
+    console.error('Batch login error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router; 

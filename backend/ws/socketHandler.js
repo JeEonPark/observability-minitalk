@@ -164,7 +164,7 @@ const handleSocketConnection = (socket, io) => {
 
       // Immediate acknowledgment (don't wait for processing)
       // This makes Python think the message was sent instantly! ⚡
-      
+
     } catch (error) {
       console.error('Send message error:', error);
       socket.emit('error', { message: 'Failed to send message' });
