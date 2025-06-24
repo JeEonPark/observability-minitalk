@@ -4,13 +4,14 @@
   "description": "MiniTalk Backend Server",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js",
-    "dev": "nodemon app.js"
+    "start": "node --max-old-space-size=8192 app.js",
+    "dev": "nodemon --max-old-space-size=8192 app.js",
+    "start-mega": "node --max-old-space-size=16384 app.js",
+    "start-ultra": "node --max-old-space-size=32768 app.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.7.2",
-    "mongoose": "^7.5.0",
     "jsonwebtoken": "^9.0.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",

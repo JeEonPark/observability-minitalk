@@ -1,7 +1,6 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 
@@ -9,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const chatRoutes = require('./routes/chat');
 const { authenticateSocket } = require('./middleware/auth');
 const { handleSocketConnection } = require('./ws/socketHandler');
+const dataManager = require('./data/dataManager');
 
 const app = express();
 const server = http.createServer(app);
@@ -23,29 +23,8 @@ const io = socketIo(server, {
 app.use(cors());
 app.use(express.json());
 
-// MongoDB connection
-const MONGODB_USERNAME = process.env.MONGODB_USERNAME;
-const MONGODB_PASSWORD = process.env.MONGODB_PASSWORD;
-const MONGODB_URI = process.env.MONGODB_URI;
-const MONGO_URL = process.env.MONGO_URL;
-
-let mongoUrl;
-if (MONGODB_USERNAME && MONGODB_PASSWORD) {
-  const encodedUsername = encodeURIComponent(MONGODB_USERNAME);
-  const encodedPassword = encodeURIComponent(MONGODB_PASSWORD);
-  mongoUrl = `mongodb://${encodedUsername}:${encodedPassword}@mongodb:27017/minitalk?authSource=admin`;
-} else if (MONGODB_URI) {
-  mongoUrl = MONGODB_URI;
-} else if (MONGO_URL) {
-  mongoUrl = MONGO_URL;
-} else {
-  mongoUrl = 'mongodb://localhost:27017/chatapp';
-}
-
-console.log('Connecting to MongoDB with URL:', mongoUrl.replace(/\/\/.*@/, '//***:***@'));
-mongoose.connect(mongoUrl)
-  .then(() => console.log('MongoDB connected successfully'))
-  .catch(err => console.error('MongoDB connection error:', err));
+// Initialize file storage (replaces MongoDB connection)
+console.log('Initializing file-based storage...');
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -56,12 +35,13 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'MiniTalk Backend is running' });
 });
 
-app.get('/ready', (req, res) => {
-  // Check if MongoDB is connected
-  if (mongoose.connection.readyState === 1) {
+app.get('/ready', async (req, res) => {
+  // Check if file storage is ready
+  const isReady = await dataManager.isReady();
+  if (isReady) {
     res.json({ status: 'OK', message: 'MiniTalk Backend is ready' });
   } else {
-    res.status(503).json({ status: 'NOT_READY', message: 'Database not connected' });
+    res.status(503).json({ status: 'NOT_READY', message: 'File storage not ready' });
   }
 });
 

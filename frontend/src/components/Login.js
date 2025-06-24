@@ -8,98 +8,180 @@ const Container = styled.div`
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  padding: 20px;
+  padding: 24px;
+  background: #0f1419;
 `;
 
-const LoginForm = styled.div`
-  background: white;
-  padding: 40px;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+const LoginCard = styled.div`
+  background: #1a1d23;
+  padding: 48px;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   width: 100%;
-  max-width: 400px;
+  max-width: 480px;
+  border: 1px solid #2d3748;
+`;
+
+const Header = styled.div`
+  text-align: center;
+  margin-bottom: 40px;
 `;
 
 const Title = styled.h1`
-  text-align: center;
-  margin-bottom: 30px;
-  color: #333;
-  font-size: 28px;
+  margin: 0 0 12px 0;
+  color: #e4e6ea;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+`;
+
+const Subtitle = styled.p`
+  margin: 0;
+  color: #a0a3a7;
+  font-size: 16px;
+  font-weight: 400;
+`;
+
+const Form = styled.form`
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 `;
 
 const FormGroup = styled.div`
-  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 `;
 
 const Label = styled.label`
-  display: block;
-  margin-bottom: 8px;
-  color: #555;
-  font-weight: 500;
+  color: #e4e6ea;
+  font-size: 14px;
+  font-weight: 600;
+  margin-left: 4px;
 `;
 
 const Input = styled.input`
   width: 100%;
-  padding: 12px;
-  border: 2px solid #e1e5e9;
-  border-radius: 8px;
+  padding: 16px 20px;
+  border: 2px solid #2d3748;
+  border-radius: 12px;
   font-size: 16px;
-  transition: border-color 0.3s;
+  background: #242830;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  color: #e4e6ea;
 
   &:focus {
-    border-color: #667eea;
+    border-color: #4285f4;
+    background: #2d3748;
+    outline: none;
+  }
+
+  &::placeholder {
+    color: #6b7280;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 `;
 
 const Button = styled.button`
   width: 100%;
-  padding: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 16px 24px;
+  background: #4285f4;
   color: white;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 15px;
-  transition: transform 0.2s;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: 2px solid #4285f4;
 
   &:hover {
-    transform: translateY(-2px);
+    background: #3367d6;
+    border-color: #3367d6;
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
   }
 
   &:disabled {
-    opacity: 0.7;
+    opacity: 0.5;
     cursor: not-allowed;
     transform: none;
+    background: #4a5568;
+    border-color: #4a5568;
   }
 `;
 
 const SecondaryButton = styled(Button)`
   background: transparent;
-  color: #667eea;
-  border: 2px solid #667eea;
+  color: #4285f4;
+  border-color: #2d3748;
+  margin-top: 16px;
 
   &:hover {
-    background: #667eea;
-    color: white;
+    background: #242830;
+    border-color: #4285f4;
+    color: #4285f4;
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    background: transparent;
+    color: #6b7280;
+    border-color: #2d3748;
   }
 `;
 
+const MessageContainer = styled.div`
+  margin-top: 24px;
+`;
+
 const ErrorMessage = styled.div`
-  color: #ff4757;
-  text-align: center;
-  margin-top: 15px;
-  padding: 10px;
-  background: #fff5f5;
-  border-radius: 8px;
+  color: #f56565;
+  background: #2d1b1b;
+  padding: 16px 20px;
+  border-radius: 12px;
+  border-left: 4px solid #f56565;
+  font-weight: 500;
+  font-size: 14px;
 `;
 
 const SuccessMessage = styled.div`
-  color: #2ed573;
-  text-align: center;
-  margin-top: 15px;
-  padding: 10px;
-  background: #f0fff4;
-  border-radius: 8px;
+  color: #48bb78;
+  background: #1a2e1a;
+  padding: 16px 20px;
+  border-radius: 12px;
+  border-left: 4px solid #48bb78;
+  font-weight: 500;
+  font-size: 14px;
+`;
+
+const Divider = styled.div`
+  display: flex;
+  align-items: center;
+  margin: 32px 0;
+  
+  &::before,
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #2d3748;
+  }
+  
+  span {
+    padding: 0 16px;
+    color: #a0a3a7;
+    font-size: 14px;
+    font-weight: 500;
+  }
 `;
 
 const Login = () => {
@@ -135,7 +217,7 @@ const Login = () => {
     } else {
       const result = await signup(username, password);
       if (result.success) {
-        setSuccess('Registration completed successfully. Please log in.');
+        setSuccess('Registration completed successfully! Please log in.');
         setIsLoginMode(true);
         setPassword('');
       } else {
@@ -155,12 +237,15 @@ const Login = () => {
 
   return (
     <Container>
-      <LoginForm>
-        <Title>
-          {isLoginMode ? 'MiniTalk Login' : 'MiniTalk Sign Up'}
-        </Title>
+      <LoginCard>
+        <Header>
+          <Title>MiniTalk</Title>
+          <Subtitle>
+            {isLoginMode ? 'Welcome back! Sign in to your account.' : 'Create a new account to get started.'}
+          </Subtitle>
+        </Header>
         
-        <form onSubmit={handleSubmit}>
+        <Form onSubmit={handleSubmit}>
           <FormGroup>
             <Label>Username</Label>
             <Input
@@ -169,6 +254,7 @@ const Login = () => {
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter your username"
               disabled={loading}
+              autoComplete="username"
             />
           </FormGroup>
           
@@ -180,21 +266,30 @@ const Login = () => {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
               disabled={loading}
+              autoComplete={isLoginMode ? "current-password" : "new-password"}
             />
           </FormGroup>
           
           <Button type="submit" disabled={loading}>
-            {loading ? 'Processing...' : (isLoginMode ? 'Login' : 'Sign Up')}
+            {loading ? 'Processing...' : (isLoginMode ? 'Sign In' : 'Create Account')}
           </Button>
-        </form>
+        </Form>
+        
+        <Divider>
+          <span>or</span>
+        </Divider>
         
         <SecondaryButton type="button" onClick={toggleMode} disabled={loading}>
-          {isLoginMode ? 'Create Account' : 'Sign In'}
+          {isLoginMode ? 'Create New Account' : 'Sign In Instead'}
         </SecondaryButton>
         
-        {error && <ErrorMessage>{error}</ErrorMessage>}
-        {success && <SuccessMessage>{success}</SuccessMessage>}
-      </LoginForm>
+        {(error || success) && (
+          <MessageContainer>
+            {error && <ErrorMessage>{error}</ErrorMessage>}
+            {success && <SuccessMessage>{success}</SuccessMessage>}
+          </MessageContainer>
+        )}
+      </LoginCard>
     </Container>
   );
 };
