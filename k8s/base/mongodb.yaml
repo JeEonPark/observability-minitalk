@@ -29,8 +29,7 @@ spec:
           mountPath: /data/db
       volumes:
       - name: mongodb-data
-        persistentVolumeClaim:
-          claimName: mongodb-pvc
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -44,17 +43,4 @@ spec:
     targetPort: 27017
     name: mongodb
   selector:
-    app: mongodb
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mongodb-pvc
-  labels:
-    app: mongodb
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi 
+    app: mongodb 

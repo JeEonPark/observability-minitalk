@@ -24,8 +24,26 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB connection
-const MONGO_URL = process.env.MONGO_URL || 'mongodb://localhost:27017/chatapp';
-mongoose.connect(MONGO_URL)
+const MONGODB_USERNAME = process.env.MONGODB_USERNAME;
+const MONGODB_PASSWORD = process.env.MONGODB_PASSWORD;
+const MONGODB_URI = process.env.MONGODB_URI;
+const MONGO_URL = process.env.MONGO_URL;
+
+let mongoUrl;
+if (MONGODB_USERNAME && MONGODB_PASSWORD) {
+  const encodedUsername = encodeURIComponent(MONGODB_USERNAME);
+  const encodedPassword = encodeURIComponent(MONGODB_PASSWORD);
+  mongoUrl = `mongodb://${encodedUsername}:${encodedPassword}@mongodb:27017/minitalk?authSource=admin`;
+} else if (MONGODB_URI) {
+  mongoUrl = MONGODB_URI;
+} else if (MONGO_URL) {
+  mongoUrl = MONGO_URL;
+} else {
+  mongoUrl = 'mongodb://localhost:27017/chatapp';
+}
+
+console.log('Connecting to MongoDB with URL:', mongoUrl.replace(/\/\/.*@/, '//***:***@'));
+mongoose.connect(mongoUrl)
   .then(() => console.log('MongoDB connected successfully'))
   .catch(err => console.error('MongoDB connection error:', err));
 
@@ -33,9 +51,18 @@ mongoose.connect(MONGO_URL)
 app.use('/api/auth', authRoutes);
 app.use('/api', chatRoutes);
 
-// Health check
+// Health check endpoints
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'MiniTalk Backend is running' });
+});
+
+app.get('/ready', (req, res) => {
+  // Check if MongoDB is connected
+  if (mongoose.connection.readyState === 1) {
+    res.json({ status: 'OK', message: 'MiniTalk Backend is ready' });
+  } else {
+    res.status(503).json({ status: 'NOT_READY', message: 'Database not connected' });
+  }
 });
 
 // Socket.IO connection handling

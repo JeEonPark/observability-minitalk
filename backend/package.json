@@ -1,6 +1,6 @@
 {
   "name": "minitalk-backend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MiniTalk Backend Server",
   "main": "app.js",
   "scripts": {

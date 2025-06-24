@@ -95,4 +95,8 @@ Thumbs.db
 .docker/
 
 # MongoDB data
-data/ 
+data/
+
+# Kubernetes secrets (contains sensitive information)
+k8s/overlays/*/secret.yaml
+**/secret.yaml 
