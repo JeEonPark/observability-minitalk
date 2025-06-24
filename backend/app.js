@@ -11,7 +11,7 @@ const { handleSocketConnection } = require('./ws/socketHandler');
 const dataManager = require('./data/dataManager');
 
 // INSANE PERFORMANCE MODE for load testing! ⚡🚀💥
-process.env.FAST_HASH = 'true';
+// process.env.FAST_HASH = 'true'; // Disabled for normal login
 process.env.UV_THREADPOOL_SIZE = '128'; // Increase thread pool for better I/O performance
 process.env.NODE_OPTIONS = '--max-old-space-size=8192'; // 8GB memory limit
 
