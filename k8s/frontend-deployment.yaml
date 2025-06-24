@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minitalk-frontend
+  namespace: minitalk
+  labels:
+    app: minitalk-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: minitalk-frontend
+  template:
+    metadata:
+      labels:
+        app: minitalk-frontend
+    spec:
+      containers:
+      - name: frontend
+        image: minitalk-frontend:latest
+        imagePullPolicy: Never  # For kind cluster
+        ports:
+        - containerPort: 3000
+        env:
+        - name: REACT_APP_BACKEND_URL
+          value: "http://minitalk-backend-service.minitalk.svc.cluster.local:4000/api"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minitalk-frontend-service
+  namespace: minitalk
+  labels:
+    app: minitalk-frontend
+spec:
+  selector:
+    app: minitalk-frontend
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+  type: ClusterIP 

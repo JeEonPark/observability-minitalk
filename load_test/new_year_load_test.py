@@ -26,9 +26,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed, ProcessPoolExec
 # Initialize colorama for colored output
 init()
 
-# Configuration - Use IP address to avoid DNS issues
-BASE_URL = "http://127.0.0.1:4000"
-SOCKET_URL = "http://127.0.0.1:4000"
+# Configuration - Use Kubernetes service names for internal communication
+BASE_URL = "http://minitalk-frontend-service.minitalk.svc.cluster.local:3000"
+SOCKET_URL = "http://minitalk-frontend-service.minitalk.svc.cluster.local:3000"
 
 # Global worker functions for multiprocessing (must be at module level for pickling)
 def create_users_worker_global(process_id, start_index, user_count):

@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minitalk-loadtest
+  namespace: minitalk
+  labels:
+    app: minitalk-loadtest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minitalk-loadtest
+  template:
+    metadata:
+      labels:
+        app: minitalk-loadtest
+    spec:
+      containers:
+      - name: loadtest
+        image: minitalk-loadtest:latest
+        imagePullPolicy: Never  # For kind cluster
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        stdin: true
+        tty: true
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minitalk-loadtest-service
+  namespace: minitalk
+  labels:
+    app: minitalk-loadtest
+spec:
+  selector:
+    app: minitalk-loadtest
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP 

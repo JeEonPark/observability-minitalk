@@ -10,8 +10,8 @@ const { authenticateSocket } = require('./middleware/auth');
 const { handleSocketConnection } = require('./ws/socketHandler');
 const dataManager = require('./data/dataManager');
 
-// INSANE PERFORMANCE MODE for load testing! ⚡🚀💥
-// process.env.FAST_HASH = 'true'; // Disabled for normal login
+// FAST_HASH completely disabled for normal operation
+process.env.FAST_HASH = 'false';
 process.env.UV_THREADPOOL_SIZE = '128'; // Increase thread pool for better I/O performance
 process.env.NODE_OPTIONS = '--max-old-space-size=8192'; // 8GB memory limit
 
@@ -29,7 +29,7 @@ const server = http.createServer(app);
 // INSANE PERFORMANCE Socket.IO configuration! 🚀💥
 const io = socketIo(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
     methods: ["GET", "POST"]
   },
   // MEGA PERFORMANCE optimizations for massive concurrent connections! 💪

@@ -592,7 +592,7 @@ class FileDataManager {
         await fs.access(messageFile);
       }
       
-      console.log(`✅ Health check passed: ${messageFiles.length} message files ready`);
+      // Health check passed silently
       
       // Start cache cleanup if not already started
       if (!this.cacheCleanupStarted) {

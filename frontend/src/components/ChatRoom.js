@@ -401,7 +401,7 @@ const ChatRoom = () => {
         socketService.offMessage();
       }
     };
-  }, [roomId, token, username]); // Added username to dependencies
+  }, [roomId, token]); // Removed username from dependencies
 
   useEffect(() => {
     scrollToBottom();
