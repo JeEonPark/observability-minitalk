@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: ghcr.io/jeeonpark/minitalk-backend:otel-v3
+        image: ghcr.io/jeeonpark/minitalk-backend:main-otel
         imagePullPolicy: Always
         ports:
         - containerPort: 4000
