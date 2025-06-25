@@ -1,8 +1,7 @@
 const dataManager = require('/app/data/dataManager');
 
-// OpenTelemetry imports for custom tracing
-const { trace, context } = require('@opentelemetry/api');
-const tracer = trace.getTracer('minitalk-backend', '1.0.1');
+// Datadog tracing imports for custom error logging
+const { tracer, logWebSocketError, logCriticalSystemError } = require('../tracing');
 
 // Message processing optimization for MEGA BOMBING! 💥
 class MessageProcessor {
@@ -152,6 +151,42 @@ class MessageProcessor {
        
      } catch (error) {
       console.error('Batch processing error:', error);
+      // Add more detailed error logging for system failures
+      console.error('🚨 BATCH PROCESSING FAILURE:');
+      console.error('❌ Error Type:', error.name);
+      console.error('❌ Error Message:', error.message);
+      console.error('❌ Stack Trace:', error.stack);
+      console.error('📊 Batch Size:', batch.length);
+      console.error('📊 Queue Length:', this.messageQueue.length);
+      
+      // Log memory usage during error
+      const memUsage = process.memoryUsage();
+      console.error('📊 Memory Usage at Error:');
+      console.error(`   RSS: ${Math.round(memUsage.rss / 1024 / 1024)}MB`);
+      console.error(`   Heap Used: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`);
+      
+      // Log to Datadog APM as ERROR
+      logWebSocketError(error, {
+        'minitalk.operation': 'batch_processing',
+        'minitalk.batch_size': batch.length,
+        'minitalk.queue_length': this.messageQueue.length,
+        'minitalk.memory.rss_mb': Math.round(memUsage.rss / 1024 / 1024),
+        'minitalk.memory.heap_used_mb': Math.round(memUsage.heapUsed / 1024 / 1024)
+      });
+      
+      // If it's a memory-related error, log as CRITICAL
+      if (error.message.includes('memory') || error.message.includes('heap') || 
+          error.name === 'RangeError' || error.name === 'Error' && error.message.includes('Maximum')) {
+        console.error('💀 CRITICAL: MEMORY-RELATED BATCH FAILURE!');
+        
+        // Log as CRITICAL system error to Datadog
+        logCriticalSystemError(error, {
+          'minitalk.operation': 'batch_processing',
+          'minitalk.failure_type': 'memory_related',
+          'minitalk.batch_size': batch.length,
+          'minitalk.system_unstable': true
+        });
+      }
     } finally {
       this.processing = false;
     }
@@ -164,12 +199,51 @@ const messageProcessor = new MessageProcessor();
 const handleSocketConnection = (socket, io) => {
   console.log(`User ${socket.userId} connected with socket ID: ${socket.id}`);
 
+  // Add error handling for socket connection
+  socket.on('error', (error) => {
+    console.error('🚨 SOCKET CONNECTION ERROR:');
+    console.error('❌ Error Type:', error.name);
+    console.error('❌ Error Message:', error.message);
+    console.error('❌ User:', socket.userId);
+    console.error('❌ Socket ID:', socket.id);
+    
+    // Log memory usage during socket error
+    const memUsage = process.memoryUsage();
+    console.error('📊 Memory Usage at Socket Error:');
+    console.error(`   RSS: ${Math.round(memUsage.rss / 1024 / 1024)}MB`);
+    console.error(`   Heap Used: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`);
+    
+    // Log to Datadog APM as ERROR
+    logWebSocketError(error, {
+      'minitalk.operation': 'socket_connection',
+      'minitalk.user': socket.userId,
+      'minitalk.socket_id': socket.id,
+      'minitalk.connection_error': true,
+      'minitalk.memory.rss_mb': Math.round(memUsage.rss / 1024 / 1024),
+      'minitalk.memory.heap_used_mb': Math.round(memUsage.heapUsed / 1024 / 1024)
+    });
+  });
+
+  // Add connection timeout handling
+  socket.on('connect_error', (error) => {
+    console.error('🚨 SOCKET CONNECT ERROR:');
+    console.error('❌ Error:', error);
+    console.error('❌ User:', socket.userId);
+    
+    // Log to Datadog APM as ERROR
+    logWebSocketError(error, {
+      'minitalk.operation': 'socket_connect',
+      'minitalk.user': socket.userId,
+      'minitalk.connect_error': true
+    });
+  });
+
   // Join user to their chat rooms
   joinUserRooms(socket);
 
   // Handle sending messages - ULTRA FAST QUEUE PROCESSING! 💥⚡
   socket.on('send_message', async (data) => {
-    // Create custom span for message sending
+    // Create custom span for message sending using Datadog tracer
     const span = tracer.startSpan('websocket.send_message');
     
     try {
@@ -177,34 +251,47 @@ const handleSocketConnection = (socket, io) => {
       const sender = socket.userId;
 
       // Add attributes to the span
-      span.setAttributes({
-        'minitalk.operation': 'send_message',
-        'minitalk.user': sender,
-        'minitalk.room_id': roomId,
-        'minitalk.message.length': content ? content.length : 0,
-        'minitalk.transport': 'websocket'
-      });
+      span.setTag('minitalk.operation', 'send_message');
+      span.setTag('minitalk.user', sender);
+      span.setTag('minitalk.room_id', roomId);
+      span.setTag('minitalk.message.length', content ? content.length : 0);
+      span.setTag('minitalk.transport', 'websocket');
 
       if (!roomId || !content) {
-        span.setStatus({ code: 2, message: 'roomId and content are required' });
+        const validationError = new Error('roomId and content are required');
+        span.setTag('error', true);
+        span.setTag('error.message', validationError.message);
+        
+        // Log validation error to Datadog
+        logWebSocketError(validationError, {
+          'minitalk.operation': 'send_message',
+          'minitalk.user': sender,
+          'minitalk.validation_failed': true
+        });
+        
         socket.emit('error', { message: 'roomId and content are required' });
+        span.finish();
         return;
       }
 
-      // Create child span for room validation
-      const validationSpan = tracer.startSpan('validation.check_room_membership', { parent: span });
-      try {
-        // Quick validation with cache (super fast!)
-        const chatRoom = await dataManager.findChatRoomByRoomId(roomId);
-        if (!chatRoom || !chatRoom.participants.includes(sender)) {
-          validationSpan.setStatus({ code: 2, message: 'User not member of room' });
-          span.setStatus({ code: 2, message: 'You are not a member of this chat room' });
-          socket.emit('error', { message: 'You are not a member of this chat room' });
-          return;
-        }
-        validationSpan.setStatus({ code: 1 }); // OK
-      } finally {
-        validationSpan.end();
+      // Quick validation with cache (super fast!)
+      const chatRoom = await dataManager.findChatRoomByRoomId(roomId);
+      if (!chatRoom || !chatRoom.participants.includes(sender)) {
+        const authError = new Error('You are not a member of this chat room');
+        span.setTag('error', true);
+        span.setTag('error.message', authError.message);
+        
+        // Log authorization error to Datadog
+        logWebSocketError(authError, {
+          'minitalk.operation': 'send_message',
+          'minitalk.user': sender,
+          'minitalk.room_id': roomId,
+          'minitalk.authorization_failed': true
+        });
+        
+        socket.emit('error', { message: 'You are not a member of this chat room' });
+        span.finish();
+        return;
       }
 
       // Queue message for ULTRA FAST batch processing! 🚀
@@ -216,25 +303,61 @@ const handleSocketConnection = (socket, io) => {
         io: io // Pass io for broadcasting
       });
 
-      span.setAttributes({
-        'minitalk.message.queued': true,
-        'minitalk.queue.size': messageProcessor.messageQueue.length
-      });
-      span.setStatus({ code: 1 }); // OK
+      span.setTag('minitalk.message.queued', true);
+      span.setTag('minitalk.queue.size', messageProcessor.messageQueue.length);
+      span.finish();
 
       // Immediate acknowledgment (don't wait for processing)
       // This makes Python think the message was sent instantly! ⚡
 
     } catch (error) {
       console.error('Send message error:', error);
-      span.setStatus({ code: 2, message: error.message });
-      span.setAttributes({
-        'minitalk.error': true,
-        'minitalk.error.message': error.message
+      // Add detailed error logging for WebSocket failures
+      console.error('🚨 WEBSOCKET MESSAGE FAILURE:');
+      console.error('❌ Error Type:', error.name);
+      console.error('❌ Error Message:', error.message);
+      console.error('❌ Stack Trace:', error.stack);
+      console.error('📊 User:', socket.userId);
+      console.error('📊 Socket ID:', socket.id);
+      console.error('📊 Data:', JSON.stringify(data, null, 2));
+      
+      // Log memory usage during error
+      const memUsage = process.memoryUsage();
+      console.error('📊 Memory Usage at Error:');
+      console.error(`   RSS: ${Math.round(memUsage.rss / 1024 / 1024)}MB`);
+      console.error(`   Heap Used: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`);
+      
+      // Log to Datadog APM as ERROR
+      logWebSocketError(error, {
+        'minitalk.operation': 'send_message',
+        'minitalk.user': socket.userId,
+        'minitalk.socket_id': socket.id,
+        'minitalk.memory.rss_mb': Math.round(memUsage.rss / 1024 / 1024),
+        'minitalk.memory.heap_used_mb': Math.round(memUsage.heapUsed / 1024 / 1024)
       });
+      
+      // Check if this is a system overload error
+      if (error.message.includes('memory') || error.message.includes('heap') || 
+          error.message.includes('timeout') || error.message.includes('ECONNRESET') ||
+          error.name === 'RangeError' || error.name === 'TimeoutError') {
+        console.error('💀 CRITICAL: SYSTEM OVERLOAD DETECTED IN WEBSOCKET!');
+        
+        // Log as CRITICAL system error to Datadog
+        logCriticalSystemError(error, {
+          'minitalk.operation': 'send_message',
+          'minitalk.user': socket.userId,
+          'minitalk.system_overload': true,
+          'minitalk.failure_type': 'system_overload'
+        });
+      }
+      
+      span.setTag('error', true);
+      span.setTag('error.message', error.message);
+      span.setTag('error.type', error.name);
+      span.setTag('minitalk.system.memory_mb', Math.round(memUsage.heapUsed / 1024 / 1024));
+      
       socket.emit('error', { message: 'Failed to send message' });
-    } finally {
-      span.end();
+      span.finish();
     }
   });
 
