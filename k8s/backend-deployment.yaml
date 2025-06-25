@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: minitalk-backend
-  namespace: minitalk
+  namespace: jonny
   labels:
     app: minitalk-backend
 spec:
@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
       - name: backend
-        image: minitalk-backend:latest
-        imagePullPolicy: Never  # For kind cluster
+        image: ghcr.io/jeeonpark/minitalk-backend:otel-v3
+        imagePullPolicy: Always
         ports:
         - containerPort: 4000
         env:
@@ -28,13 +28,30 @@ spec:
           value: "your-secret-key-change-in-production"
         - name: NODE_ENV
           value: "production"
+        # OpenTelemetry environment variables
+        - name: DD_TRACE_AGENT_URL
+          value: "http://datadog-agent.monitoring.svc.cluster.local:8126"
+        - name: OTEL_SERVICE_NAME
+          value: "minitalk-backend"
+        - name: OTEL_SERVICE_VERSION
+          value: "1.0.1"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=minitalk-backend,service.version=1.0.1,service.namespace=jonny"
+        - name: DD_ENV
+          value: "production"
+        - name: DD_SERVICE
+          value: "minitalk-backend"
+        - name: DD_VERSION
+          value: "1.0.1"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://datadog-agent.monitoring.svc.cluster.local:4318/v1/traces"
         resources:
           requests:
             memory: "1Gi"
-            cpu: "1000m"
+            cpu: "250m"
           limits:
-            memory: "24Gi"
-            cpu: "8000m"
+            memory: "2Gi"
+            cpu: "500m"
         livenessProbe:
           httpGet:
             path: /health
@@ -58,7 +75,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: minitalk-backend-service
-  namespace: minitalk
+  namespace: jonny
   labels:
     app: minitalk-backend
 spec:

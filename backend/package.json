@@ -15,7 +15,10 @@
     "jsonwebtoken": "^9.0.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "@opentelemetry/api": "^1.8.0",
+    "@opentelemetry/sdk-node": "^0.51.1",
+    "@opentelemetry/auto-instrumentations-node": "^0.46.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

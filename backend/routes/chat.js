@@ -3,15 +3,31 @@ const { v4: uuidv4 } = require('uuid');
 const dataManager = require('/app/data/dataManager');
 const { authenticateToken } = require('../middleware/auth');
 
+// OpenTelemetry imports for custom tracing
+const { trace, context } = require('@opentelemetry/api');
+const tracer = trace.getTracer('minitalk-backend', '1.0.1');
+
 const router = express.Router();
 
 // Create chatroom
 router.post('/chatrooms', authenticateToken, async (req, res) => {
+  // Create custom span for chatroom creation
+  const span = tracer.startSpan('chatroom.create');
+  
   try {
     const { name, participants = [] } = req.body;
     const createdBy = req.user.username;
 
+    // Add attributes to the span
+    span.setAttributes({
+      'minitalk.operation': 'create_chatroom',
+      'minitalk.user': createdBy,
+      'minitalk.chatroom.name': name,
+      'minitalk.participants.count': participants.length
+    });
+
     if (!name) {
+      span.setStatus({ code: 2, message: 'Chat room name is required' }); // ERROR
       return res.status(400).json({ error: 'Chat room name is required' });
     }
 
@@ -19,17 +35,46 @@ router.post('/chatrooms', authenticateToken, async (req, res) => {
     const allParticipants = [...new Set([createdBy, ...participants])];
 
     const roomId = uuidv4();
-    const chatRoom = await dataManager.createChatRoom({
-      roomId,
-      name,
-      participants: allParticipants,
-      createdBy
+    
+    // Create child span for database operation
+    const dbSpan = tracer.startSpan('database.create_chatroom', { parent: span });
+    try {
+      const chatRoom = await dataManager.createChatRoom({
+        roomId,
+        name,
+        participants: allParticipants,
+        createdBy
+      });
+      
+      dbSpan.setAttributes({
+        'minitalk.chatroom.id': roomId,
+        'minitalk.database.operation': 'create_chatroom'
+      });
+      dbSpan.setStatus({ code: 1 }); // OK
+    } catch (dbError) {
+      dbSpan.setStatus({ code: 2, message: dbError.message }); // ERROR
+      throw dbError;
+    } finally {
+      dbSpan.end();
+    }
+
+    span.setAttributes({
+      'minitalk.chatroom.id': roomId,
+      'minitalk.response.status': 201
     });
+    span.setStatus({ code: 1 }); // OK
 
     res.status(201).json({ roomId, name, participants: allParticipants });
   } catch (error) {
     console.error('Create chatroom error:', error);
+    span.setStatus({ code: 2, message: error.message }); // ERROR
+    span.setAttributes({
+      'minitalk.error': true,
+      'minitalk.error.message': error.message
+    });
     res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    span.end();
   }
 });
 

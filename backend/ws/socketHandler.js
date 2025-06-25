@@ -1,5 +1,9 @@
 const dataManager = require('/app/data/dataManager');
 
+// OpenTelemetry imports for custom tracing
+const { trace, context } = require('@opentelemetry/api');
+const tracer = trace.getTracer('minitalk-backend', '1.0.1');
+
 // Message processing optimization for MEGA BOMBING! 💥
 class MessageProcessor {
   constructor() {
@@ -18,6 +22,11 @@ class MessageProcessor {
     // Moving average for recent 20 logs
     this.recentRates = [];
     this.maxRecentRates = 20;
+    
+    // For preventing duplicate log output
+    this.lastLogMessage = '';
+    this.lastLogTime = 0;
+    this.duplicateLogCount = 0;
     
     this.startBatchProcessor();
   }
@@ -76,12 +85,35 @@ class MessageProcessor {
                            this.stats.instantRate > 1000 ? '🔥' :
                            this.stats.instantRate > 500 ? '⚡' : '🚀';
         
-        console.log(`\x1b[35m💥 MEGA BOMBER LIVE ${speedStatus}:\x1b[0m ` +
+        const currentLogMessage = `\x1b[35m💥 MEGA BOMBER LIVE ${speedStatus}:\x1b[0m ` +
           `\x1b[32mProcessed: ${this.stats.processed.toLocaleString()}\x1b[0m | ` +
           `\x1b[33mQueue: ${this.messageQueue.length} ${queueStatus}\x1b[0m | ` +
           `\x1b[36mAvg(20): ${recentAvgRate.toFixed(0)}/sec\x1b[0m | ` +
           `\x1b[31mNOW: ${this.stats.instantRate}/sec ${speedStatus}\x1b[0m | ` +
-          `\x1b[34mTotal: ${this.stats.queued.toLocaleString()}\x1b[0m`);
+          `\x1b[34mTotal: ${this.stats.queued.toLocaleString()}\x1b[0m`;
+        
+        // Only log if message is different from the last one
+        if (currentLogMessage !== this.lastLogMessage) {
+          // If we had duplicate messages, show how many were skipped
+          if (this.duplicateLogCount > 0) {
+            console.log(`\x1b[90m... (${this.duplicateLogCount} identical messages skipped)\x1b[0m`);
+            this.duplicateLogCount = 0;
+          }
+          
+          console.log(currentLogMessage);
+          this.lastLogMessage = currentLogMessage;
+          this.lastLogTime = Date.now();
+        } else {
+          this.duplicateLogCount++;
+          
+          // Show periodic update for long-running identical states (every 10 seconds)
+          const timeSinceLastLog = Date.now() - this.lastLogTime;
+          if (timeSinceLastLog > 10000) {
+            console.log(`${currentLogMessage} \x1b[90m(stable for ${Math.floor(timeSinceLastLog/1000)}s)\x1b[0m`);
+            this.lastLogTime = Date.now();
+            this.duplicateLogCount = 0;
+          }
+        }
       }
     }, 200); // Every 200ms = 5 times per second!
   }
@@ -137,20 +169,42 @@ const handleSocketConnection = (socket, io) => {
 
   // Handle sending messages - ULTRA FAST QUEUE PROCESSING! 💥⚡
   socket.on('send_message', async (data) => {
+    // Create custom span for message sending
+    const span = tracer.startSpan('websocket.send_message');
+    
     try {
       const { roomId, content } = data;
       const sender = socket.userId;
 
+      // Add attributes to the span
+      span.setAttributes({
+        'minitalk.operation': 'send_message',
+        'minitalk.user': sender,
+        'minitalk.room_id': roomId,
+        'minitalk.message.length': content ? content.length : 0,
+        'minitalk.transport': 'websocket'
+      });
+
       if (!roomId || !content) {
+        span.setStatus({ code: 2, message: 'roomId and content are required' });
         socket.emit('error', { message: 'roomId and content are required' });
         return;
       }
 
-      // Quick validation with cache (super fast!)
-      const chatRoom = await dataManager.findChatRoomByRoomId(roomId);
-      if (!chatRoom || !chatRoom.participants.includes(sender)) {
-        socket.emit('error', { message: 'You are not a member of this chat room' });
-        return;
+      // Create child span for room validation
+      const validationSpan = tracer.startSpan('validation.check_room_membership', { parent: span });
+      try {
+        // Quick validation with cache (super fast!)
+        const chatRoom = await dataManager.findChatRoomByRoomId(roomId);
+        if (!chatRoom || !chatRoom.participants.includes(sender)) {
+          validationSpan.setStatus({ code: 2, message: 'User not member of room' });
+          span.setStatus({ code: 2, message: 'You are not a member of this chat room' });
+          socket.emit('error', { message: 'You are not a member of this chat room' });
+          return;
+        }
+        validationSpan.setStatus({ code: 1 }); // OK
+      } finally {
+        validationSpan.end();
       }
 
       // Queue message for ULTRA FAST batch processing! 🚀
@@ -162,12 +216,25 @@ const handleSocketConnection = (socket, io) => {
         io: io // Pass io for broadcasting
       });
 
+      span.setAttributes({
+        'minitalk.message.queued': true,
+        'minitalk.queue.size': messageProcessor.messageQueue.length
+      });
+      span.setStatus({ code: 1 }); // OK
+
       // Immediate acknowledgment (don't wait for processing)
       // This makes Python think the message was sent instantly! ⚡
 
     } catch (error) {
       console.error('Send message error:', error);
+      span.setStatus({ code: 2, message: error.message });
+      span.setAttributes({
+        'minitalk.error': true,
+        'minitalk.error.message': error.message
+      });
       socket.emit('error', { message: 'Failed to send message' });
+    } finally {
+      span.end();
     }
   });
 
