@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: ghcr.io/jeeonpark/minitalk-backend:main-otel
+        image: ghcr.io/jeeonpark/minitalk-backend:main-otlp-v3
         imagePullPolicy: Always
         ports:
         - containerPort: 4000
@@ -43,6 +43,10 @@ spec:
           value: "minitalk-backend"
         - name: DD_VERSION
           value: "1.0.1"
+        - name: DD_TRACE_ENABLED
+          value: "true"
+        - name: DD_LOGS_INJECTION
+          value: "true"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: "http://datadog-agent.monitoring.svc.cluster.local:4318/v1/traces"
         resources:
