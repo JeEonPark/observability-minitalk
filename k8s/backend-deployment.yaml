@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: ghcr.io/jeeonpark/minitalk-backend:main-dd-error-v1
+        image: ghcr.io/jeeonpark/minitalk-backend:main-dd-error-v2
         imagePullPolicy: Always
         ports:
         - containerPort: 4000

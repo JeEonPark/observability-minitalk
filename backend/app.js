@@ -124,33 +124,56 @@ setInterval(() => {
   }
 }, 5000); // Check every 5 seconds
 
-// Monitor event loop lag (CPU overload detection)
-let lastEventLoopTime = process.hrtime();
-setInterval(() => {
-  const currentTime = process.hrtime();
-  const lag = (currentTime[0] - lastEventLoopTime[0]) * 1000 + 
-             (currentTime[1] - lastEventLoopTime[1]) / 1000000;
+// Monitor event loop lag (CPU overload detection) - More accurate method
+let eventLoopWarningCount = 0;
+let lastEventLoopLogTime = 0;
+
+function measureEventLoopLag() {
+  const start = process.hrtime.bigint();
   
-  lastEventLoopTime = currentTime;
-  
-  // If event loop lag is over 100ms, we have a problem
-  if (lag > 100) {
-    console.error('🚨 EVENT LOOP LAG WARNING:');
-    console.error(`⚠️  Lag: ${Math.round(lag)}ms (Normal: <10ms)`);
+  setImmediate(() => {
+    const lag = Number(process.hrtime.bigint() - start) / 1000000; // Convert nanoseconds to milliseconds
     
-    // Log to Datadog APM as PERFORMANCE ERROR
-    const lagError = new Error(`Event loop lag detected: ${Math.round(lag)}ms`);
-    logCriticalSystemError(lagError, {
-      'minitalk.performance.event_loop_lag_ms': Math.round(lag),
-      'minitalk.performance.cpu_overload': lag > 1000,
-      'minitalk.category': 'performance_issue'
-    });
-    
-    if (lag > 1000) {
-      console.error('💀 CRITICAL: EVENT LOOP BLOCKED - CPU OVERLOAD!');
+    // If event loop lag is over 100ms, we have a problem
+    if (lag > 100) {
+      eventLoopWarningCount++;
+      const now = Date.now();
+      
+      // 10초마다 한 번씩만 로깅 (스팸 방지)
+      if (now - lastEventLoopLogTime > 10000) {
+        console.error('🚨 EVENT LOOP LAG WARNING:');
+        console.error(`⚠️  Lag: ${Math.round(lag)}ms (Normal: <10ms)`);
+        console.error(`⚠️  Warning Count: ${eventLoopWarningCount}`);
+        
+        // Log to Datadog APM as PERFORMANCE ERROR
+        const lagError = new Error(`Event loop lag detected: ${Math.round(lag)}ms`);
+        logCriticalSystemError(lagError, {
+          'minitalk.performance.event_loop_lag_ms': Math.round(lag),
+          'minitalk.performance.cpu_overload': lag > 1000,
+          'minitalk.performance.warning_count': eventLoopWarningCount,
+          'minitalk.category': 'performance_issue'
+        });
+        
+        if (lag > 1000) {
+          console.error('💀 CRITICAL: EVENT LOOP BLOCKED - CPU OVERLOAD!');
+        }
+        
+        lastEventLoopLogTime = now;
+      }
+    } else {
+      // Reset warning count if lag is normal
+      if (eventLoopWarningCount > 0 && lag < 50) {
+        eventLoopWarningCount = 0;
+      }
     }
-  }
-}, 1000); // Check every second
+    
+    // Schedule next measurement
+    setTimeout(measureEventLoopLag, 5000); // Check every 5 seconds
+  });
+}
+
+// Start event loop monitoring
+measureEventLoopLag();
 
 // ========== END CRITICAL ERROR MONITORING ==========
 
