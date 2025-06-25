@@ -83,6 +83,22 @@ const Username = styled.span`
   font-size: 14px;
 `;
 
+const AdminButton = styled.button`
+  padding: 12px 20px;
+  background: #ff9500;
+  color: white;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  cursor: pointer;
+
+  &:hover {
+    background: #e6850e;
+    transform: translateY(-1px);
+  }
+`;
+
 const LogoutButton = styled.button`
   padding: 12px 20px;
   background: #dc3545;
@@ -447,6 +463,7 @@ const ChatRoomList = () => {
               </UserAvatar>
               <Username>{username}</Username>
             </UserBadge>
+            <AdminButton onClick={() => navigate('/admin')}>🛠️ Admin</AdminButton>
             <LogoutButton onClick={handleLogout}>Logout</LogoutButton>
           </UserInfo>
         </Header>

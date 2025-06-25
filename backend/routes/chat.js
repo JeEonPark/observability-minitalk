@@ -1,6 +1,6 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
-const dataManager = require('../data/dataManager');
+const dataManager = require('/app/data/dataManager');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -213,6 +213,36 @@ router.post('/chatrooms/:roomId/leave', authenticateToken, async (req, res) => {
     res.json({ message: 'Successfully left the chat room' });
   } catch (error) {
     console.error('Leave chatroom error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE ALL MESSAGES - DANGER ZONE! 🚨⚠️
+router.delete('/messages/delete-all', authenticateToken, async (req, res) => {
+  try {
+    const { confirmationCode } = req.body;
+
+    // Safety check - require confirmation code
+    if (confirmationCode !== 'DELETE_ALL_MESSAGES_CONFIRM') {
+      return res.status(400).json({ 
+        error: 'Invalid confirmation code. This is a dangerous operation!' 
+      });
+    }
+
+    console.log(`🚨 DANGER ZONE: Deleting ALL messages!`);
+    
+    // Delete all messages using dataManager
+    const result = await dataManager.deleteAllMessages();
+
+    console.log(`✅ All messages deleted successfully! Deleted: ${result.deletedCount} messages`);
+
+    res.json({
+      message: `All messages deleted successfully! Deleted: ${result.deletedCount} messages`,
+      deletedCount: result.deletedCount,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Delete all messages error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

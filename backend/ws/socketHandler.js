@@ -1,4 +1,4 @@
-const dataManager = require('../data/dataManager');
+const dataManager = require('/app/data/dataManager');
 
 // Message processing optimization for MEGA BOMBING! 💥
 class MessageProcessor {

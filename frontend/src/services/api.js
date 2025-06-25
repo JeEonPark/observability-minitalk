@@ -36,4 +36,28 @@ api.interceptors.response.use(
   }
 );
 
+// Delete all users - DANGER ZONE! 🚨⚠️
+export const deleteAllUsers = async (confirmationCode) => {
+  try {
+    const response = await api.delete('/auth/delete-all-users', {
+      data: { confirmationCode }
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+// Delete all messages - DANGER ZONE! 🚨⚠️
+export const deleteAllMessages = async (confirmationCode) => {
+  try {
+    const response = await api.delete('/messages/delete-all', {
+      data: { confirmationCode }
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
 export default api; 

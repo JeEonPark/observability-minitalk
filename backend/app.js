@@ -8,7 +8,7 @@ const authRoutes = require('./routes/auth');
 const chatRoutes = require('./routes/chat');
 const { authenticateSocket } = require('./middleware/auth');
 const { handleSocketConnection } = require('./ws/socketHandler');
-const dataManager = require('./data/dataManager');
+const dataManager = require('/app/data/dataManager');
 
 // FAST_HASH completely disabled for normal operation
 process.env.FAST_HASH = 'false';

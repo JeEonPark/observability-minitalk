@@ -1,6 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const dataManager = require('../data/dataManager');
+const dataManager = require('/app/data/dataManager');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -151,6 +151,40 @@ router.post('/login-batch', async (req, res) => {
     });
   } catch (error) {
     console.error('Batch login error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE ALL USERS - DANGER ZONE! 🚨⚠️
+router.delete('/delete-all-users', async (req, res) => {
+  try {
+    const { confirmationCode } = req.body;
+
+    // Safety check - require confirmation code
+    if (confirmationCode !== 'DELETE_ALL_USERS_CONFIRM') {
+      return res.status(400).json({ 
+        error: 'Invalid confirmation code. This is a dangerous operation!' 
+      });
+    }
+
+    // Get current user count before deletion
+    const allUsers = await dataManager.getAllUsers();
+    const userCount = allUsers.length;
+
+    console.log(`🚨 DANGER ZONE: Deleting ALL ${userCount} users!`);
+    
+    // Delete all users using dataManager
+    const result = await dataManager.deleteAllUsers();
+
+    console.log(`✅ All users deleted successfully! Deleted: ${userCount} users`);
+
+    res.json({
+      message: `All users deleted successfully! Deleted: ${userCount} users`,
+      deletedCount: userCount,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Delete all users error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

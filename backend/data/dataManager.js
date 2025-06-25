@@ -684,6 +684,65 @@ class FileDataManager {
     console.log(`📂 Created new message file: ${newFile} (index: ${this.currentMessageFileIndex})`);
     return newFile;
   }
+
+  // Get all users - for admin operations
+  async getAllUsers() {
+    return await this.readFile(this.usersFile);
+  }
+
+  // DELETE ALL USERS - DANGER ZONE! 🚨⚠️
+  async deleteAllUsers() {
+    return this.queueFileOperation(this.usersFile, async () => {
+      const users = await this.readFile(this.usersFile);
+      const userCount = users.length;
+      
+      console.log(`🚨 DANGER ZONE: Deleting ALL ${userCount} users from storage!`);
+      
+      // Clear all users
+      await this.writeFile(this.usersFile, []);
+      
+      console.log(`✅ All users deleted from storage! Deleted: ${userCount} users`);
+      
+      return {
+        deletedCount: userCount,
+        timestamp: new Date().toISOString()
+      };
+    });
+  }
+
+  // DELETE ALL MESSAGES - DANGER ZONE! 🚨⚠️
+  async deleteAllMessages() {
+    const messageFiles = await this.getAllMessageFiles();
+    let totalDeleted = 0;
+    
+    console.log(`🚨 DANGER ZONE: Deleting ALL messages from ${messageFiles.length} files!`);
+    
+    // Delete messages from all files
+    for (const messageFile of messageFiles) {
+      await this.queueFileOperation(messageFile, async () => {
+        try {
+          const messages = await this.readFile(messageFile);
+          const messageCount = messages.length;
+          
+          if (messageCount > 0) {
+            await this.writeFile(messageFile, []);
+            totalDeleted += messageCount;
+            console.log(`🗑️ Cleared ${messageCount} messages from ${messageFile}`);
+          }
+        } catch (error) {
+          console.error(`Error deleting messages from ${messageFile}:`, error);
+        }
+      });
+    }
+    
+    console.log(`✅ All messages deleted from storage! Deleted: ${totalDeleted} messages across ${messageFiles.length} files`);
+    
+    return {
+      deletedCount: totalDeleted,
+      filesCleared: messageFiles.length,
+      timestamp: new Date().toISOString()
+    };
+  }
 }
 
 module.exports = new FileDataManager(); 

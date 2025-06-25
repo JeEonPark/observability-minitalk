@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minitalk-backend
+  namespace: jonny
+  labels:
+    app: minitalk-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minitalk-backend
+  template:
+    metadata:
+      labels:
+        app: minitalk-backend
+    spec:
+      containers:
+      - name: backend
+        image: ghcr.io/jeeonpark/minitalk-backend:v4
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 4000
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "4000"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 4000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 4000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      nodeSelector:
+        topology.kubernetes.io/zone: us-east-1a
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minitalk-backend-service
+  namespace: jonny
+  labels:
+    app: minitalk-backend
+spec:
+  selector:
+    app: minitalk-backend
+  ports:
+  - port: 4000
+    targetPort: 4000
+    protocol: TCP
+  type: ClusterIP 

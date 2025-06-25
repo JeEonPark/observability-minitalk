@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minitalk-loadtest
+  namespace: jonny
+  labels:
+    app: minitalk-loadtest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minitalk-loadtest
+  template:
+    metadata:
+      labels:
+        app: minitalk-loadtest
+    spec:
+      containers:
+      - name: loadtest
+        image: ghcr.io/jeeonpark/minitalk-loadtest:v6
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "100m"
+          limits:
+            memory: "2Gi"
+            cpu: "200m"
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        command: ["python", "light_load_test.py"]
+        stdin: true
+        tty: true
+      nodeSelector:
+        topology.kubernetes.io/zone: us-east-1a
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minitalk-loadtest-service
+  namespace: jonny
+  labels:
+    app: minitalk-loadtest
+spec:
+  selector:
+    app: minitalk-loadtest
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP 

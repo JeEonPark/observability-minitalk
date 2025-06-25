@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
 import ChatRoomList from './components/ChatRoomList';
 import ChatRoom from './components/ChatRoom';
+import AdminPanel from './components/AdminPanel';
 import GlobalStyle from './styles/GlobalStyle';
 
 const AppContainer = styled.div`
@@ -33,6 +34,11 @@ function App() {
             <Route path="/chat/:roomId" element={
               <ProtectedRoute>
                 <ChatRoom />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin" element={
+              <ProtectedRoute>
+                <AdminPanel />
               </ProtectedRoute>
             } />
             <Route path="/" element={<Navigate to="/rooms" />} />

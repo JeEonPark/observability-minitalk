@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minitalk-frontend
+  namespace: jonny
+  labels:
+    app: minitalk-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minitalk-frontend
+  template:
+    metadata:
+      labels:
+        app: minitalk-frontend
+    spec:
+      containers:
+      - name: frontend
+        image: ghcr.io/jeeonpark/minitalk-frontend:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: REACT_APP_BACKEND_URL
+          value: "http://minitalk-backend-service.jonny.svc.cluster.local:4000/api"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "100m"
+          limits:
+            memory: "1Gi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      nodeSelector:
+        topology.kubernetes.io/zone: us-east-1a
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minitalk-frontend-service
+  namespace: jonny
+  labels:
+    app: minitalk-frontend
+spec:
+  selector:
+    app: minitalk-frontend
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+  type: ClusterIP 
