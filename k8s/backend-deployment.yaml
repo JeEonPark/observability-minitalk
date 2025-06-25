@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: ghcr.io/jeeonpark/minitalk-backend:main-otlp-v3
+        image: ghcr.io/jeeonpark/minitalk-backend:main-otlp-v4
         imagePullPolicy: Always
         ports:
         - containerPort: 4000

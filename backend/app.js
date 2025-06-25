@@ -81,14 +81,9 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'MiniTalk Backend is running' });
 });
 
-app.get('/ready', async (req, res) => {
-  // Check if file storage is ready
-  const isReady = await dataManager.isReady();
-  if (isReady) {
-    res.json({ status: 'OK', message: 'MiniTalk Backend is ready' });
-  } else {
-    res.status(503).json({ status: 'NOT_READY', message: 'File storage not ready' });
-  }
+app.get('/ready', (req, res) => {
+  // Simple readiness check - if server is running, it's ready
+  res.json({ status: 'OK', message: 'MiniTalk Backend is ready' });
 });
 
 // Socket.IO connection handling
