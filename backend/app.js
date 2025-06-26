@@ -260,7 +260,7 @@ io.engine.on('connection_error', (err) => {
   const engineError = new Error(`Socket.IO Engine Error: ${err.message || err.code}`);
   engineError.name = 'SocketIOEngineError';
   
-  // Log to Datadog APM as ERROR
+  // Log to OpenTelemetry as ERROR
   logCriticalSystemError(engineError, {
     'minitalk.operation': 'socketio_engine',
     'minitalk.error_code': err.code,

@@ -1,58 +1,82 @@
-// Use Datadog native tracing instead of OTLP for better compatibility
-const tracer = require('dd-trace').init({
-  service: process.env.DD_SERVICE || 'minitalk-backend',
-  env: process.env.DD_ENV || 'production',
-  version: process.env.DD_VERSION || '1.0.1',
-  hostname: process.env.DD_TRACE_AGENT_HOSTNAME || 'datadog-agent.monitoring.svc.cluster.local',
-  port: process.env.DD_TRACE_AGENT_PORT || 8126,
-  logInjection: true,
-  runtimeMetrics: true,
-  profiling: true,
-  debug: false
+const { NodeSDK } = require('@opentelemetry/sdk-node');
+const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
+const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
+const { trace } = require('@opentelemetry/api');
+
+// Create OTLP HTTP exporter targeting Datadog Agent
+const otlpExporter = new OTLPTraceExporter({
+  url: 'http://datadog-agent.monitoring.svc.cluster.local:4318/v1/traces',
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
-// Helper function to properly log errors to Datadog APM
-function logErrorToDatadog(error, spanName = 'error', additionalTags = {}) {
+// Initialize OpenTelemetry SDK with simple configuration
+const sdk = new NodeSDK({
+  serviceName: 'minitalk-backend',
+  serviceVersion: '1.0.1',
+  traceExporter: otlpExporter,
+  instrumentations: [
+    getNodeAutoInstrumentations({
+      '@opentelemetry/instrumentation-fs': {
+        enabled: false, // Disable file system instrumentation for performance
+      },
+    }),
+  ],
+});
+
+// Start the SDK
+sdk.start();
+console.log('🔍 OpenTelemetry OTLP tracing initialized successfully for minitalk-backend');
+console.log(`🎯 OTLP Endpoint: http://datadog-agent.monitoring.svc.cluster.local:4318/v1/traces`);
+console.log(`🏷️  Service: minitalk-backend (production)`);
+
+// Get tracer for custom spans
+const tracer = trace.getTracer('minitalk-backend', '1.0.1');
+
+// Helper function to properly log errors to OpenTelemetry traces
+function logErrorToOTLP(error, spanName = 'error', additionalAttributes = {}) {
   const span = tracer.startSpan(spanName);
   
   try {
     // Set error status on span - this makes it show as ERROR in Datadog APM
-    span.setTag('error', true);
-    span.setTag('error.type', error.name);
-    span.setTag('error.message', error.message);
-    span.setTag('error.stack', error.stack);
+    span.recordException(error);
+    span.setStatus({
+      code: 2, // ERROR
+      message: error.message,
+    });
     
-    // Add additional tags
-    Object.keys(additionalTags).forEach(key => {
-      span.setTag(key, additionalTags[key]);
+    // Add additional attributes
+    Object.keys(additionalAttributes).forEach(key => {
+      span.setAttributes({ [key]: additionalAttributes[key] });
     });
     
     // Add system metrics
     const memUsage = process.memoryUsage();
-    span.setTag('system.memory.rss_mb', Math.round(memUsage.rss / 1024 / 1024));
-    span.setTag('system.memory.heap_used_mb', Math.round(memUsage.heapUsed / 1024 / 1024));
-    span.setTag('system.memory.heap_total_mb', Math.round(memUsage.heapTotal / 1024 / 1024));
+    span.setAttributes({
+      'system.memory.rss_mb': Math.round(memUsage.rss / 1024 / 1024),
+      'system.memory.heap_used_mb': Math.round(memUsage.heapUsed / 1024 / 1024),
+      'system.memory.heap_total_mb': Math.round(memUsage.heapTotal / 1024 / 1024),
+    });
     
     // Log to console with proper error level
-    console.error('🚨 DATADOG ERROR LOGGED:', {
+    console.error('🚨 OTLP ERROR LOGGED:', {
       error_type: error.name,
       error_message: error.message,
       span_name: spanName,
-      tags: additionalTags
+      attributes: additionalAttributes
     });
     
-    // Finish span with error status
-    span.finish(error);
-    
   } catch (loggingError) {
-    console.error('Failed to log error to Datadog:', loggingError);
-    span.finish();
+    console.error('Failed to log error to OTLP:', loggingError);
+  } finally {
+    span.end();
   }
 }
 
 // Helper function to log critical system errors
 function logCriticalSystemError(error, context = {}) {
-  logErrorToDatadog(error, 'system.critical_error', {
+  logErrorToOTLP(error, 'system.critical_error', {
     'minitalk.severity': 'critical',
     'minitalk.category': 'system_failure',
     ...context
@@ -61,7 +85,7 @@ function logCriticalSystemError(error, context = {}) {
 
 // Helper function to log memory errors
 function logMemoryError(error, memoryInfo = {}) {
-  logErrorToDatadog(error, 'system.memory_error', {
+  logErrorToOTLP(error, 'system.memory_error', {
     'minitalk.severity': 'critical',
     'minitalk.category': 'memory_failure',
     'minitalk.memory_threshold_exceeded': true,
@@ -71,22 +95,26 @@ function logMemoryError(error, memoryInfo = {}) {
 
 // Helper function to log WebSocket errors
 function logWebSocketError(error, socketInfo = {}) {
-  logErrorToDatadog(error, 'websocket.error', {
+  logErrorToOTLP(error, 'websocket.error', {
     'minitalk.severity': 'error',
     'minitalk.category': 'websocket_failure',
     ...socketInfo
   });
 }
 
-console.log('🔍 Datadog native tracing initialized successfully for minitalk-backend');
-console.log(`🎯 Datadog Agent: ${process.env.DD_TRACE_AGENT_HOSTNAME || 'datadog-agent.monitoring.svc.cluster.local'}:${process.env.DD_TRACE_AGENT_PORT || 8126}`);
-console.log(`🏷️  Service: ${process.env.DD_SERVICE || 'minitalk-backend'} (${process.env.DD_ENV || 'production'})`);
-
 // Export tracer and helper functions
 module.exports = {
   tracer,
-  logErrorToDatadog,
+  logErrorToOTLP,
   logCriticalSystemError,
   logMemoryError,
   logWebSocketError
-}; 
+};
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  sdk.shutdown()
+    .then(() => console.log('OpenTelemetry terminated'))
+    .catch((error) => console.log('Error terminating OpenTelemetry', error))
+    .finally(() => process.exit(0));
+}); 
