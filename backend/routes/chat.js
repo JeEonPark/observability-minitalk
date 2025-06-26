@@ -9,72 +9,205 @@ const tracer = trace.getTracer('minitalk-backend', '1.0.1');
 
 const router = express.Router();
 
-// Create chatroom
+// Helper function to create child spans with proper context
+function createChildSpan(parentSpan, name, attributes = {}) {
+  return tracer.startSpan(name, {
+    parent: parentSpan,
+    attributes: {
+      'minitalk.span.type': 'child',
+      ...attributes
+    }
+  });
+}
+
+// Helper function for database operations with tracing
+async function tracedDatabaseOperation(parentSpan, operationName, operation) {
+  const dbSpan = createChildSpan(parentSpan, `database.${operationName}`, {
+    'minitalk.database.operation': operationName,
+    'minitalk.component': 'database'
+  });
+  
+  try {
+    const result = await operation();
+    dbSpan.setStatus({ code: 1 }); // OK
+    dbSpan.setAttributes({
+      'minitalk.database.success': true
+    });
+    return result;
+  } catch (error) {
+    dbSpan.setStatus({ code: 2, message: error.message }); // ERROR
+    dbSpan.setAttributes({
+      'minitalk.database.error': true,
+      'minitalk.error.message': error.message
+    });
+    throw error;
+  } finally {
+    dbSpan.end();
+  }
+}
+
+// Helper function for validation with tracing
+function tracedValidation(parentSpan, validationName, validationFn) {
+  const validationSpan = createChildSpan(parentSpan, `validation.${validationName}`, {
+    'minitalk.validation.type': validationName,
+    'minitalk.component': 'validation'
+  });
+  
+  try {
+    const result = validationFn();
+    validationSpan.setStatus({ code: 1 }); // OK
+    validationSpan.setAttributes({
+      'minitalk.validation.success': true,
+      'minitalk.validation.result': typeof result === 'boolean' ? result : 'validated'
+    });
+    return result;
+  } catch (error) {
+    validationSpan.setStatus({ code: 2, message: error.message }); // ERROR
+    validationSpan.setAttributes({
+      'minitalk.validation.error': true,
+      'minitalk.error.message': error.message
+    });
+    throw error;
+  } finally {
+    validationSpan.end();
+  }
+}
+
+// Create chatroom with detailed parent-child tracing
 router.post('/chatrooms', authenticateToken, async (req, res) => {
-  // Create custom span for chatroom creation
-  const span = tracer.startSpan('chatroom.create');
+  // Parent span for the entire HTTP request
+  const rootSpan = tracer.startSpan('http.post.chatrooms.create', {
+    attributes: {
+      'http.method': 'POST',
+      'http.route': '/chatrooms',
+      'minitalk.operation': 'create_chatroom',
+      'minitalk.span.type': 'root',
+      'minitalk.component': 'api'
+    }
+  });
   
   try {
     const { name, participants = [] } = req.body;
     const createdBy = req.user.username;
 
-    // Add attributes to the span
-    span.setAttributes({
-      'minitalk.operation': 'create_chatroom',
+    // Add user context to root span
+    rootSpan.setAttributes({
       'minitalk.user': createdBy,
       'minitalk.chatroom.name': name,
-      'minitalk.participants.count': participants.length
+      'minitalk.participants.count': participants.length,
+      'minitalk.request.body.size': JSON.stringify(req.body).length
     });
 
-    if (!name) {
-      span.setStatus({ code: 2, message: 'Chat room name is required' }); // ERROR
-      return res.status(400).json({ error: 'Chat room name is required' });
+    // Child span 1: Input validation
+    tracedValidation(rootSpan, 'chatroom_name', () => {
+      if (!name) {
+        throw new Error('Chat room name is required');
+      }
+      return true;
+    });
+
+    // Child span 2: Participant processing
+    const participantSpan = createChildSpan(rootSpan, 'business_logic.process_participants', {
+      'minitalk.component': 'business_logic',
+      'minitalk.participants.input_count': participants.length
+    });
+    
+    let allParticipants;
+    try {
+      // Add creator to participants if not already included
+      allParticipants = [...new Set([createdBy, ...participants])];
+      participantSpan.setAttributes({
+        'minitalk.participants.final_count': allParticipants.length,
+        'minitalk.participants.creator_added': !participants.includes(createdBy)
+      });
+      participantSpan.setStatus({ code: 1 }); // OK
+    } finally {
+      participantSpan.end();
     }
 
-    // Add creator to participants if not already included
-    const allParticipants = [...new Set([createdBy, ...participants])];
-
-    const roomId = uuidv4();
+    // Child span 3: Generate room ID
+    const idGenerationSpan = createChildSpan(rootSpan, 'business_logic.generate_room_id', {
+      'minitalk.component': 'business_logic'
+    });
     
-    // Create child span for database operation
-    const dbSpan = tracer.startSpan('database.create_chatroom', { parent: span });
+    let roomId;
     try {
-      const chatRoom = await dataManager.createChatRoom({
+      roomId = uuidv4();
+      idGenerationSpan.setAttributes({
+        'minitalk.chatroom.id': roomId,
+        'minitalk.id.generation.method': 'uuid_v4'
+      });
+      idGenerationSpan.setStatus({ code: 1 }); // OK
+    } finally {
+      idGenerationSpan.end();
+    }
+
+    // Child span 4: Database operation
+    const chatRoom = await tracedDatabaseOperation(rootSpan, 'create_chatroom', async () => {
+      return await dataManager.createChatRoom({
         roomId,
         name,
         participants: allParticipants,
         createdBy
       });
-      
-      dbSpan.setAttributes({
-        'minitalk.chatroom.id': roomId,
-        'minitalk.database.operation': 'create_chatroom'
-      });
-      dbSpan.setStatus({ code: 1 }); // OK
-    } catch (dbError) {
-      dbSpan.setStatus({ code: 2, message: dbError.message }); // ERROR
-      throw dbError;
-    } finally {
-      dbSpan.end();
-    }
+    });
 
-    span.setAttributes({
-      'minitalk.chatroom.id': roomId,
+    // Child span 5: Response formatting
+    const responseSpan = createChildSpan(rootSpan, 'response.format_success', {
+      'minitalk.component': 'response',
       'minitalk.response.status': 201
     });
-    span.setStatus({ code: 1 }); // OK
+    
+    let responseData;
+    try {
+      responseData = { roomId, name, participants: allParticipants };
+      responseSpan.setAttributes({
+        'minitalk.response.chatroom.id': roomId,
+        'minitalk.response.participants.count': allParticipants.length,
+        'minitalk.response.size': JSON.stringify(responseData).length
+      });
+      responseSpan.setStatus({ code: 1 }); // OK
+    } finally {
+      responseSpan.end();
+    }
 
-    res.status(201).json({ roomId, name, participants: allParticipants });
+    // Update root span with success info
+    rootSpan.setAttributes({
+      'minitalk.chatroom.id': roomId,
+      'minitalk.response.status': 201,
+      'minitalk.success': true
+    });
+    rootSpan.setStatus({ code: 1 }); // OK
+
+    res.status(201).json(responseData);
   } catch (error) {
     console.error('Create chatroom error:', error);
-    span.setStatus({ code: 2, message: error.message }); // ERROR
-    span.setAttributes({
+    
+    // Child span for error handling
+    const errorSpan = createChildSpan(rootSpan, 'error.handle_create_chatroom', {
+      'minitalk.component': 'error_handler',
+      'minitalk.error.type': error.name || 'UnknownError'
+    });
+    
+    try {
+      errorSpan.setAttributes({
+        'minitalk.error.message': error.message,
+        'minitalk.error.stack': error.stack
+      });
+      errorSpan.setStatus({ code: 2, message: error.message }); // ERROR
+    } finally {
+      errorSpan.end();
+    }
+
+    rootSpan.setStatus({ code: 2, message: error.message }); // ERROR
+    rootSpan.setAttributes({
       'minitalk.error': true,
-      'minitalk.error.message': error.message
+      'minitalk.error.message': error.message,
+      'minitalk.response.status': 500
     });
     res.status(500).json({ error: 'Internal server error' });
   } finally {
-    span.end();
+    rootSpan.end();
   }
 });
 
@@ -126,26 +259,108 @@ router.post('/chatrooms-batch', authenticateToken, async (req, res) => {
   }
 });
 
-// Get user's chatrooms
+// Get user's chatrooms with parent-child tracing
 router.get('/chatrooms', authenticateToken, async (req, res) => {
+  // Parent span for the entire HTTP request
+  const rootSpan = tracer.startSpan('http.get.chatrooms.list', {
+    attributes: {
+      'http.method': 'GET',
+      'http.route': '/chatrooms',
+      'minitalk.operation': 'list_chatrooms',
+      'minitalk.span.type': 'root',
+      'minitalk.component': 'api'
+    }
+  });
+  
   try {
     const username = req.user.username;
     
-    const chatRooms = await dataManager.findChatRoomsByParticipant(username);
+    rootSpan.setAttributes({
+      'minitalk.user': username
+    });
 
-    // Format response to match expected structure
-    const formattedRooms = chatRooms.map(room => ({
-      roomId: room.roomId,
-      name: room.name,
-      participants: room.participants,
-      createdBy: room.createdBy,
-      createdAt: room.createdAt
-    }));
+    // Child span 1: Database query
+    const chatRooms = await tracedDatabaseOperation(rootSpan, 'find_chatrooms_by_participant', async () => {
+      return await dataManager.findChatRoomsByParticipant(username);
+    });
+
+    // Child span 2: Data transformation
+    const transformSpan = createChildSpan(rootSpan, 'business_logic.transform_chatrooms', {
+      'minitalk.component': 'business_logic',
+      'minitalk.chatrooms.raw_count': chatRooms.length
+    });
+    
+    let formattedRooms;
+    try {
+      formattedRooms = chatRooms.map(room => ({
+        roomId: room.roomId,
+        name: room.name,
+        participants: room.participants,
+        createdBy: room.createdBy,
+        createdAt: room.createdAt
+      }));
+      
+      transformSpan.setAttributes({
+        'minitalk.chatrooms.formatted_count': formattedRooms.length,
+        'minitalk.transformation.success': true
+      });
+      transformSpan.setStatus({ code: 1 }); // OK
+    } finally {
+      transformSpan.end();
+    }
+
+    // Child span 3: Response formatting
+    const responseSpan = createChildSpan(rootSpan, 'response.format_chatrooms_list', {
+      'minitalk.component': 'response',
+      'minitalk.response.status': 200
+    });
+    
+    try {
+      responseSpan.setAttributes({
+        'minitalk.response.chatrooms.count': formattedRooms.length,
+        'minitalk.response.size': JSON.stringify(formattedRooms).length
+      });
+      responseSpan.setStatus({ code: 1 }); // OK
+    } finally {
+      responseSpan.end();
+    }
+
+    rootSpan.setAttributes({
+      'minitalk.chatrooms.count': formattedRooms.length,
+      'minitalk.response.status': 200,
+      'minitalk.success': true
+    });
+    rootSpan.setStatus({ code: 1 }); // OK
 
     res.json(formattedRooms);
   } catch (error) {
     console.error('Get chatrooms error:', error);
+    
+    // Child span for error handling
+    const errorSpan = createChildSpan(rootSpan, 'error.handle_get_chatrooms', {
+      'minitalk.component': 'error_handler',
+      'minitalk.error.type': error.name || 'UnknownError'
+    });
+    
+    try {
+      errorSpan.setAttributes({
+        'minitalk.error.message': error.message,
+        'minitalk.error.stack': error.stack
+      });
+      errorSpan.setStatus({ code: 2, message: error.message }); // ERROR
+    } finally {
+      errorSpan.end();
+    }
+
+    rootSpan.setStatus({ code: 2, message: error.message }); // ERROR
+    rootSpan.setAttributes({
+      'minitalk.error': true,
+      'minitalk.error.message': error.message,
+      'minitalk.response.status': 500
+    });
     res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    rootSpan.end();
   }
 });
 
