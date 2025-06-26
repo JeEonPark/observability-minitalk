@@ -1,17 +1,19 @@
 const { NodeSDK } = require('@opentelemetry/sdk-node');
 const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
-const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
+const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-grpc');
 const { trace } = require('@opentelemetry/api');
 
-// Create OTLP HTTP exporter targeting Datadog Agent
+console.log('🔧 Starting OpenTelemetry OTLP GRPC initialization...');
+
+// Create OTLP GRPC exporter targeting Datadog Agent
 const otlpExporter = new OTLPTraceExporter({
-  url: 'http://datadog-agent.monitoring.svc.cluster.local:4318/v1/traces',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  url: 'http://datadog-agent.monitoring.svc.cluster.local:4317',
+  headers: {},
 });
 
-// Initialize OpenTelemetry SDK with simple configuration
+console.log('🎯 OTLP GRPC Exporter created with URL: http://datadog-agent.monitoring.svc.cluster.local:4317');
+
+// Initialize OpenTelemetry SDK with Datadog-compatible service info
 const sdk = new NodeSDK({
   serviceName: 'minitalk-backend',
   serviceVersion: '1.0.1',
@@ -19,36 +21,73 @@ const sdk = new NodeSDK({
   instrumentations: [
     getNodeAutoInstrumentations({
       '@opentelemetry/instrumentation-fs': {
-        enabled: false, // Disable file system instrumentation for performance
+        enabled: false,
+      },
+      '@opentelemetry/instrumentation-http': {
+        enabled: true,
+      },
+      '@opentelemetry/instrumentation-express': {
+        enabled: true,
       },
     }),
   ],
 });
 
+console.log('⚙️ NodeSDK configured with GRPC OTLP exporter');
+
 // Start the SDK
-sdk.start();
-console.log('🔍 OpenTelemetry OTLP tracing initialized successfully for minitalk-backend');
-console.log(`🎯 OTLP Endpoint: http://datadog-agent.monitoring.svc.cluster.local:4318/v1/traces`);
-console.log(`🏷️  Service: minitalk-backend (production)`);
+try {
+  sdk.start();
+  console.log('🔍 OpenTelemetry OTLP GRPC tracing initialized successfully for minitalk-backend');
+  console.log(`🎯 OTLP GRPC Endpoint: http://datadog-agent.monitoring.svc.cluster.local:4317`);
+  console.log(`🏷️  Service: minitalk-backend (production)`);
+  console.log(`📋 Using GRPC instead of HTTP for better APM integration`);
+} catch (error) {
+  console.error('❌ Failed to start OpenTelemetry SDK:', error);
+}
 
 // Get tracer for custom spans
 const tracer = trace.getTracer('minitalk-backend', '1.0.1');
+
+// Create a test span with Datadog-compatible attributes
+setTimeout(() => {
+  console.log('🧪 Creating test span with GRPC OTLP...');
+  const testSpan = tracer.startSpan('test.grpc.initialization');
+  testSpan.setAttributes({
+    'operation.name': 'test.grpc.initialization',
+    'service.name': 'minitalk-backend',
+    'env': 'production',
+    'version': '1.0.1',
+    'component': 'grpc_tracing_setup',
+    'span.type': 'custom',
+    'otlp.transport': 'grpc',
+  });
+  testSpan.end();
+  console.log('✅ Test GRPC span created with Datadog-compatible attributes');
+}, 2000);
 
 // Helper function to properly log errors to OpenTelemetry traces
 function logErrorToOTLP(error, spanName = 'error', additionalAttributes = {}) {
   const span = tracer.startSpan(spanName);
   
   try {
-    // Set error status on span - this makes it show as ERROR in Datadog APM
+    // Set error status on span
     span.recordException(error);
     span.setStatus({
       code: 2, // ERROR
       message: error.message,
     });
     
-    // Add additional attributes
-    Object.keys(additionalAttributes).forEach(key => {
-      span.setAttributes({ [key]: additionalAttributes[key] });
+    // Add Datadog-compatible error attributes
+    span.setAttributes({
+      'error': true,
+      'error.type': error.name,
+      'error.message': error.message,
+      'error.stack': error.stack,
+      'service.name': 'minitalk-backend',
+      'env': 'production',
+      'otlp.transport': 'grpc',
+      ...additionalAttributes
     });
     
     // Add system metrics
@@ -59,8 +98,7 @@ function logErrorToOTLP(error, spanName = 'error', additionalAttributes = {}) {
       'system.memory.heap_total_mb': Math.round(memUsage.heapTotal / 1024 / 1024),
     });
     
-    // Log to console with proper error level
-    console.error('🚨 OTLP ERROR LOGGED:', {
+    console.error('🚨 OTLP GRPC ERROR LOGGED:', {
       error_type: error.name,
       error_message: error.message,
       span_name: spanName,
@@ -68,7 +106,7 @@ function logErrorToOTLP(error, spanName = 'error', additionalAttributes = {}) {
     });
     
   } catch (loggingError) {
-    console.error('Failed to log error to OTLP:', loggingError);
+    console.error('Failed to log error to OTLP GRPC:', loggingError);
   } finally {
     span.end();
   }
@@ -113,8 +151,9 @@ module.exports = {
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
+  console.log('🛑 Shutting down OpenTelemetry GRPC...');
   sdk.shutdown()
-    .then(() => console.log('OpenTelemetry terminated'))
-    .catch((error) => console.log('Error terminating OpenTelemetry', error))
+    .then(() => console.log('✅ OpenTelemetry GRPC terminated'))
+    .catch((error) => console.log('❌ Error terminating OpenTelemetry GRPC', error))
     .finally(() => process.exit(0));
 }); 
