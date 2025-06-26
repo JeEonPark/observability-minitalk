@@ -100,7 +100,7 @@ router.post('/chatrooms', authenticateToken, async (req, res) => {
 
     // Child span 1: Input validation
     tracedValidation(rootSpan, 'chatroom_name', () => {
-      if (!name) {
+    if (!name) {
         throw new Error('Chat room name is required');
       }
       return true;
@@ -114,7 +114,7 @@ router.post('/chatrooms', authenticateToken, async (req, res) => {
     
     let allParticipants;
     try {
-      // Add creator to participants if not already included
+    // Add creator to participants if not already included
       allParticipants = [...new Set([createdBy, ...participants])];
       participantSpan.setAttributes({
         'minitalk.participants.final_count': allParticipants.length,
@@ -145,11 +145,11 @@ router.post('/chatrooms', authenticateToken, async (req, res) => {
     // Child span 4: Database operation
     const chatRoom = await tracedDatabaseOperation(rootSpan, 'create_chatroom', async () => {
       return await dataManager.createChatRoom({
-        roomId,
-        name,
-        participants: allParticipants,
-        createdBy
-      });
+      roomId,
+      name,
+      participants: allParticipants,
+      createdBy
+    });
     });
 
     // Child span 5: Response formatting
@@ -293,12 +293,12 @@ router.get('/chatrooms', authenticateToken, async (req, res) => {
     let formattedRooms;
     try {
       formattedRooms = chatRooms.map(room => ({
-        roomId: room.roomId,
-        name: room.name,
-        participants: room.participants,
-        createdBy: room.createdBy,
-        createdAt: room.createdAt
-      }));
+      roomId: room.roomId,
+      name: room.name,
+      participants: room.participants,
+      createdBy: room.createdBy,
+      createdAt: room.createdAt
+    }));
       
       transformSpan.setAttributes({
         'minitalk.chatrooms.formatted_count': formattedRooms.length,
