@@ -6,7 +6,7 @@ metadata:
   labels:
     app: minitalk-backend
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: minitalk-backend
@@ -62,4 +62,8 @@ spec:
   - port: 4000
     targetPort: 4000
     protocol: TCP
-  type: ClusterIP 
+  type: ClusterIP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
