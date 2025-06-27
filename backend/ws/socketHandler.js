@@ -73,7 +73,6 @@ function logCriticalSystemError(error, attributes = {}) {
   criticalSpan.end();
 }
 
-// Simple message processing - no batch optimization
 class MessageProcessor {
   constructor() {
     this.stats = {
@@ -82,7 +81,6 @@ class MessageProcessor {
     };
   }
   
-  // Process each message individually - no batching
   async processMessage(messageData, parentSpan = null) {
     const processSpan = parentSpan ? 
       createChildSpan(parentSpan, 'message_processor.process_single', {
