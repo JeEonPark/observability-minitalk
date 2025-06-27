@@ -6,7 +6,7 @@ metadata:
   labels:
     app: minitalk-backend
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: minitalk-backend
