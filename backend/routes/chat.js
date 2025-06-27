@@ -211,7 +211,7 @@ router.post('/chatrooms', authenticateToken, async (req, res) => {
   }
 });
 
-// MEGA BATCH CHATROOM CREATION for ULTRA SPEED! 🏠🚀
+// Individual chatroom creation processing (no batch optimization)
 router.post('/chatrooms-batch', authenticateToken, async (req, res) => {
   try {
     const { rooms } = req.body;
@@ -221,37 +221,42 @@ router.post('/chatrooms-batch', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Rooms array is required' });
     }
 
-    // Prepare rooms data with UUIDs and creator
-    const roomsData = rooms.map(room => {
-      if (!room.name) {
-        throw new Error('All rooms must have a name');
+    // Process rooms individually (performance issue for large batches)
+    const created = [];
+    const errors = [];
+
+    for (const room of rooms) {
+      try {
+        if (!room.name) {
+          errors.push({ name: room.name, error: 'Room name is required' });
+          continue;
+        }
+
+        // Add creator to participants if not already included
+        const allParticipants = [...new Set([createdBy, ...(room.participants || [])])];
+
+        const roomData = {
+          roomId: uuidv4(),
+          name: room.name,
+          participants: allParticipants,
+          createdBy
+        };
+
+        const createdRoom = await dataManager.createChatRoom(roomData);
+        created.push({
+          roomId: createdRoom.roomId,
+          name: createdRoom.name,
+          participants: createdRoom.participants
+        });
+      } catch (error) {
+        errors.push({ name: room.name, error: error.message });
       }
-
-      // Add creator to participants if not already included
-      const allParticipants = [...new Set([createdBy, ...(room.participants || [])])];
-
-      return {
-        roomId: uuidv4(),
-        name: room.name,
-        participants: allParticipants,
-        createdBy
-      };
-    });
-
-    // Create rooms in batch using dataManager
-    const result = await dataManager.createChatRoomsBatch(roomsData);
-
-    // Format response
-    const formattedCreated = result.created.map(room => ({
-      roomId: room.roomId,
-      name: room.name,
-      participants: room.participants
-    }));
+    }
 
     res.status(201).json({
-      message: `Batch room creation completed: ${result.created.length} rooms created, ${result.errors.length} errors`,
-      created: formattedCreated,
-      errors: result.errors
+      message: `Batch room creation completed: ${created.length} rooms created, ${errors.length} errors`,
+      created: created,
+      errors: errors
     });
   } catch (error) {
     console.error('Batch chatroom creation error:', error);
