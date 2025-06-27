@@ -157,3 +157,4 @@ process.on('SIGTERM', () => {
     .catch((error) => console.log('❌ Error terminating OpenTelemetry GRPC', error))
     .finally(() => process.exit(0));
 }); 
+ 

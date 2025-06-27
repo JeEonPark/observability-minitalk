@@ -234,7 +234,7 @@ app.get('/health', (req, res) => {
 
 app.get('/ready', (req, res) => {
   // Simple readiness check - if server is running, it's ready
-  res.json({ status: 'OK', message: 'MiniTalk Backend is ready' });
+    res.json({ status: 'OK', message: 'MiniTalk Backend is ready' });
 });
 
 // Socket.IO connection handling

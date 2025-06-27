@@ -94,8 +94,6 @@ class MessageProcessor {
     
     // For preventing duplicate log output
     this.lastLogMessage = '';
-    this.lastLogTime = 0;
-    this.duplicateLogCount = 0;
     
     this.startBatchProcessor();
   }
@@ -121,17 +119,17 @@ class MessageProcessor {
         ...messageData,
         parentSpan: parentSpan // Store parent span for later use
       });
-      this.stats.queued++;
+    this.stats.queued++;
       
       queueSpan.setAttributes({
         'minitalk.queue.size_after': this.messageQueue.length,
         'minitalk.stats.total_queued': this.stats.queued
       });
       queueSpan.setStatus({ code: 1 }); // OK
-      
-      // Auto-flush if queue is getting large
-      if (this.messageQueue.length >= this.batchSize) {
-        this.flushMessages();
+    
+    // Auto-flush if queue is getting large
+    if (this.messageQueue.length >= this.batchSize) {
+      this.flushMessages();
       }
     } finally {
       queueSpan.end();
@@ -190,25 +188,8 @@ class MessageProcessor {
         
         // Only log if message is different from the last one
         if (currentLogMessage !== this.lastLogMessage) {
-          // If we had duplicate messages, show how many were skipped
-          if (this.duplicateLogCount > 0) {
-            console.log(`\x1b[90m... (${this.duplicateLogCount} identical messages skipped)\x1b[0m`);
-            this.duplicateLogCount = 0;
-          }
-          
           console.log(currentLogMessage);
           this.lastLogMessage = currentLogMessage;
-          this.lastLogTime = Date.now();
-        } else {
-          this.duplicateLogCount++;
-          
-          // Show periodic update for long-running identical states (every 10 seconds)
-          const timeSinceLastLog = Date.now() - this.lastLogTime;
-          if (timeSinceLastLog > 10000) {
-            console.log(`${currentLogMessage} \x1b[90m(stable for ${Math.floor(timeSinceLastLog/1000)}s)\x1b[0m`);
-            this.lastLogTime = Date.now();
-            this.duplicateLogCount = 0;
-          }
         }
       }
     }, 200); // Every 200ms = 5 times per second!
@@ -230,7 +211,7 @@ class MessageProcessor {
     this.processing = true;
     const batch = this.messageQueue.splice(0, this.batchSize);
     
-    try {
+         try {
       batchSpan.setAttributes({
         'minitalk.batch.actual_size': batch.length,
         'minitalk.queue.size_after': this.messageQueue.length
@@ -239,32 +220,32 @@ class MessageProcessor {
       // Child span 1: Database batch operation
       const savedMessages = await tracedDatabaseOperation(batchSpan, 'create_messages_batch', async () => {
         return await dataManager.createMessagesBatch(batch.map(msgData => ({
-          roomId: msgData.roomId,
-          sender: msgData.sender,
-          content: msgData.content,
-          timestamp: msgData.timestamp
-        })));
+         roomId: msgData.roomId,
+         sender: msgData.sender,
+         content: msgData.content,
+         timestamp: msgData.timestamp
+       })));
       });
-      
+       
       // Child span 2: Broadcast messages
       const broadcastSpan = createChildSpan(batchSpan, 'websocket.broadcast_batch', {
         'minitalk.broadcast.message_count': batch.length
       });
       
       try {
-        batch.forEach((msgData, index) => {
-          const savedMessage = savedMessages[index];
-          
-          msgData.io.to(msgData.roomId).emit('message', {
-            type: 'message',
-            roomId: msgData.roomId,
-            sender: msgData.sender,
-            content: msgData.content,
-            timestamp: savedMessage.timestamp
-          });
-          
-          this.stats.processed++;
-        });
+       batch.forEach((msgData, index) => {
+         const savedMessage = savedMessages[index];
+         
+         msgData.io.to(msgData.roomId).emit('message', {
+           type: 'message',
+           roomId: msgData.roomId,
+           sender: msgData.sender,
+           content: msgData.content,
+           timestamp: savedMessage.timestamp
+         });
+         
+         this.stats.processed++;
+       });
         
         broadcastSpan.setAttributes({
           'minitalk.broadcast.success': true,
@@ -281,7 +262,7 @@ class MessageProcessor {
       });
       batchSpan.setStatus({ code: 1 }); // OK
        
-    } catch (error) {
+     } catch (error) {
       console.error('Batch processing error:', error);
       // Add more detailed error logging for system failures
       console.error('🚨 BATCH PROCESSING FAILURE:');
@@ -421,7 +402,7 @@ const handleSocketConnection = (socket, io) => {
       });
       
       try {
-        if (!roomId || !content) {
+      if (!roomId || !content) {
           throw new Error('roomId and content are required');
         }
         
@@ -444,7 +425,7 @@ const handleSocketConnection = (socket, io) => {
         });
         
         try {
-          socket.emit('error', { message: 'roomId and content are required' });
+        socket.emit('error', { message: 'roomId and content are required' });
           errorResponseSpan.setStatus({ code: 1 }); // OK
         } finally {
           errorResponseSpan.end();
@@ -473,7 +454,7 @@ const handleSocketConnection = (socket, io) => {
           return await dataManager.findChatRoomByRoomId(roomId);
         });
         
-        if (!chatRoom || !chatRoom.participants.includes(sender)) {
+      if (!chatRoom || !chatRoom.participants.includes(sender)) {
           throw new Error('You are not a member of this chat room');
         }
         
@@ -497,7 +478,7 @@ const handleSocketConnection = (socket, io) => {
         });
         
         try {
-          socket.emit('error', { message: 'You are not a member of this chat room' });
+        socket.emit('error', { message: 'You are not a member of this chat room' });
           errorResponseSpan.setStatus({ code: 1 }); // OK
         } finally {
           errorResponseSpan.end();
@@ -523,11 +504,11 @@ const handleSocketConnection = (socket, io) => {
       
       try {
         const messageData = {
-          roomId,
-          sender,
-          content,
-          timestamp: new Date().toISOString(),
-          io: io // Pass io for broadcasting
+        roomId,
+        sender,
+        content,
+        timestamp: new Date().toISOString(),
+        io: io // Pass io for broadcasting
         };
         
         // Queue message for ULTRA FAST batch processing! 🚀
@@ -616,7 +597,7 @@ const handleSocketConnection = (socket, io) => {
         });
         
         try {
-          socket.emit('error', { message: 'Failed to send message' });
+      socket.emit('error', { message: 'Failed to send message' });
           errorResponseSpan.setStatus({ code: 1 }); // OK
         } finally {
           errorResponseSpan.end();
