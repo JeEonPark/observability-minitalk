@@ -241,13 +241,13 @@ class FileDataManager {
       const chatRooms = await this.readFile(this.chatRoomsFile);
       const filteredRooms = chatRooms.filter(room => room.roomId !== roomId);
       
-      if (filteredRooms.length === chatRooms.length) {
+      if (chatRooms.length === filteredRooms.length) {
         throw new Error('Chat room not found');
       }
 
       await this.writeFile(this.chatRoomsFile, filteredRooms);
       
-      // Also delete messages for this room
+      // Also delete all messages in this room
       await this.deleteMessagesByRoomId(roomId);
       
       return true;
