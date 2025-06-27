@@ -27,7 +27,7 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// MEGA BATCH USER SIGNUP for ULTRA SPEED! 👥🚀
+// Individual user signup processing (no batch optimization)
 router.post('/signup-batch', async (req, res) => {
   try {
     const { users } = req.body;
@@ -43,13 +43,23 @@ router.post('/signup-batch', async (req, res) => {
       }
     }
 
-    // Create users in batch using dataManager
-    const result = await dataManager.createUsersBatch(users);
+    // Process users individually (performance issue for large batches)
+    const created = [];
+    const errors = [];
+
+    for (const userData of users) {
+      try {
+        const user = await dataManager.createUser(userData);
+        created.push({ username: user.username, id: user.id });
+      } catch (error) {
+        errors.push({ username: userData.username, error: error.message });
+      }
+    }
 
     res.status(201).json({
-      message: `Batch signup completed: ${result.created.length} users created, ${result.errors.length} errors`,
-      created: result.created,
-      errors: result.errors
+      message: `Batch signup completed: ${created.length} users created, ${errors.length} errors`,
+      created: created,
+      errors: errors
     });
   } catch (error) {
     console.error('Batch signup error:', error);
