@@ -184,9 +184,7 @@ const handleSocketConnection = (socket, io) => {
   // Join user to their chat rooms
   joinUserRooms(socket);
 
-  // Handle sending messages - process each message individually
   socket.on('send_message', async (data) => {
-    // Create root span for the entire WebSocket message handling
     const rootSpan = tracer.startSpan('websocket.handle_send_message', {
       attributes: {
         'websocket.event': 'send_message',
