@@ -73,72 +73,6 @@ function logCriticalSystemError(error, attributes = {}) {
   criticalSpan.end();
 }
 
-class MessageProcessor {
-  constructor() {
-    this.stats = {
-      processed: 0,
-      startTime: Date.now()
-    };
-  }
-  
-  async processMessage(messageData, parentSpan = null) {
-    const processSpan = parentSpan ? 
-      createChildSpan(parentSpan, 'message_processor.process_single', {
-        'minitalk.message.individual': true
-      }) : 
-      tracer.startSpan('message_processor.process_single', {
-        attributes: {
-          'minitalk.component': 'message_processor',
-          'minitalk.message.individual': true
-        }
-      });
-    
-    try {
-      // Save message to database immediately
-      const savedMessage = await tracedDatabaseOperation(processSpan, 'create_message', async () => {
-        return await dataManager.createMessage({
-          roomId: messageData.roomId,
-          sender: messageData.sender,
-          content: messageData.content,
-          timestamp: messageData.timestamp
-        });
-      });
-      
-      // Broadcast message immediately
-      messageData.io.to(messageData.roomId).emit('message', {
-        type: 'message',
-        roomId: messageData.roomId,
-        sender: messageData.sender,
-        content: messageData.content,
-        timestamp: savedMessage.timestamp
-      });
-      
-      this.stats.processed++;
-      
-      processSpan.setAttributes({
-        'minitalk.message.processed': true,
-        'minitalk.stats.total_processed': this.stats.processed
-      });
-      processSpan.setStatus({ code: 1 }); // OK
-      
-      return savedMessage;
-    } catch (error) {
-      console.error('Message processing error:', error);
-      processSpan.setStatus({ code: 2, message: error.message });
-      processSpan.setAttributes({
-        'minitalk.message.error': true,
-        'minitalk.error.message': error.message
-      });
-      throw error;
-    } finally {
-      processSpan.end();
-    }
-  }
-}
-
-// Global message processor instance
-const messageProcessor = new MessageProcessor();
-
 const handleSocketConnection = (socket, io) => {
   console.log(`User ${socket.userId} connected with socket ID: ${socket.id}`);
 
@@ -184,7 +118,9 @@ const handleSocketConnection = (socket, io) => {
   // Join user to their chat rooms
   joinUserRooms(socket);
 
+  // Handle sending messages - Simple individual processing
   socket.on('send_message', async (data) => {
+    // Create root span for the entire WebSocket message handling
     const rootSpan = tracer.startSpan('websocket.handle_send_message', {
       attributes: {
         'websocket.event': 'send_message',
@@ -209,150 +145,81 @@ const handleSocketConnection = (socket, io) => {
 
       // Child span 1: Input validation
       const validationSpan = createChildSpan(rootSpan, 'validation.message_input', {
-        'minitalk.validation.type': 'message_input'
+        'minitalk.validation.room_id_provided': !!roomId,
+        'minitalk.validation.content_provided': !!content,
+        'minitalk.validation.sender_provided': !!sender
       });
       
       try {
-        if (!roomId || !content) {
-          throw new Error('roomId and content are required');
+        if (!roomId || !content || !sender) {
+          const errorMsg = 'Missing required fields: roomId, content, or sender';
+          validationSpan.setStatus({ code: 2, message: errorMsg });
+          validationSpan.setAttributes({
+            'minitalk.validation.error': true,
+            'minitalk.error.message': errorMsg
+          });
+          socket.emit('error', { message: errorMsg });
+          return;
         }
         
-        validationSpan.setAttributes({
-          'minitalk.validation.success': true,
-          'minitalk.validation.room_id_present': !!roomId,
-          'minitalk.validation.content_present': !!content
-        });
         validationSpan.setStatus({ code: 1 }); // OK
-      } catch (validationError) {
-        validationSpan.setStatus({ code: 2, message: validationError.message });
         validationSpan.setAttributes({
-          'minitalk.validation.error': true,
-          'minitalk.error.message': validationError.message
+          'minitalk.validation.success': true
         });
-        
-        // Child span for error response
-        const errorResponseSpan = createChildSpan(rootSpan, 'websocket.send_error_response', {
-          'minitalk.response.type': 'validation_error'
-        });
-        
-        try {
-          socket.emit('error', { message: 'roomId and content are required' });
-          errorResponseSpan.setStatus({ code: 1 }); // OK
-        } finally {
-          errorResponseSpan.end();
-        }
-        
-        rootSpan.setStatus({ code: 2, message: validationError.message });
-        rootSpan.setAttributes({
-          'minitalk.error': true,
-          'minitalk.error.type': 'validation_error'
-        });
-        
-        return;
       } finally {
         validationSpan.end();
       }
 
-      // Child span 2: Authorization check
-      const authSpan = createChildSpan(rootSpan, 'authorization.check_room_membership', {
-        'minitalk.authorization.room_id': roomId,
-        'minitalk.authorization.user': sender
-      });
-      
-      let chatRoom;
-      try {
-        chatRoom = await tracedDatabaseOperation(authSpan, 'find_chatroom_by_id', async () => {
-          return await dataManager.findChatRoomByRoomId(roomId);
-        });
-        
-        if (!chatRoom || !chatRoom.participants.includes(sender)) {
-          throw new Error('You are not a member of this chat room');
-        }
-        
-        authSpan.setAttributes({
-          'minitalk.authorization.success': true,
-          'minitalk.authorization.room_exists': !!chatRoom,
-          'minitalk.authorization.is_participant': chatRoom ? chatRoom.participants.includes(sender) : false,
-          'minitalk.authorization.participants_count': chatRoom ? chatRoom.participants.length : 0
-        });
-        authSpan.setStatus({ code: 1 }); // OK
-      } catch (authError) {
-        authSpan.setStatus({ code: 2, message: authError.message });
-        authSpan.setAttributes({
-          'minitalk.authorization.error': true,
-          'minitalk.error.message': authError.message
-        });
-        
-        // Child span for error response
-        const errorResponseSpan = createChildSpan(rootSpan, 'websocket.send_error_response', {
-          'minitalk.response.type': 'authorization_error'
-        });
-        
-        try {
-          socket.emit('error', { message: 'You are not a member of this chat room' });
-          errorResponseSpan.setStatus({ code: 1 }); // OK
-        } finally {
-          errorResponseSpan.end();
-        }
-        
-        rootSpan.setStatus({ code: 2, message: authError.message });
-        rootSpan.setAttributes({
-          'minitalk.error': true,
-          'minitalk.error.type': 'authorization_error'
-        });
-        
-        return;
-      } finally {
-        authSpan.end();
-      }
+      // Process message individually - no batching
+      const messageData = {
+        roomId,
+        sender,
+        content,
+        timestamp: new Date().toISOString()
+      };
 
-      // Child span 3: Process message immediately (no batching)
-      const processSpan = createChildSpan(rootSpan, 'message_processor.process_immediate', {
-        'minitalk.message.sender': sender,
-        'minitalk.message.room_id': roomId,
-        'minitalk.message.content_length': content.length
+      // Child span 2: Database operation
+      const savedMessage = await tracedDatabaseOperation(rootSpan, 'create_message', async () => {
+        return await dataManager.createMessage(messageData);
+      });
+
+      // Child span 3: Broadcast message
+      const broadcastSpan = createChildSpan(rootSpan, 'websocket.broadcast_message', {
+        'minitalk.broadcast.room_id': roomId,
+        'minitalk.broadcast.sender': sender
       });
       
       try {
-        const messageData = {
-          roomId,
-          sender,
-          content,
-          timestamp: new Date().toISOString(),
-          io: io
-        };
-        
-        // Process message immediately - no queuing
-        await messageProcessor.processMessage(messageData, processSpan);
-        
-        processSpan.setAttributes({
-          'minitalk.message.processed': true,
-          'minitalk.message.timestamp': messageData.timestamp
+        io.to(roomId).emit('message', {
+          type: 'message',
+          roomId: roomId,
+          sender: sender,
+          content: content,
+          timestamp: savedMessage.timestamp
         });
-        processSpan.setStatus({ code: 1 }); // OK
+        
+        broadcastSpan.setAttributes({
+          'minitalk.broadcast.success': true,
+          'minitalk.message.id': savedMessage.id
+        });
+        broadcastSpan.setStatus({ code: 1 }); // OK
       } finally {
-        processSpan.end();
+        broadcastSpan.end();
       }
-
-      // Update root span with success info
+      
       rootSpan.setAttributes({
         'minitalk.message.processed': true,
-        'minitalk.message.sender': sender,
-        'minitalk.message.room_id': roomId,
-        'minitalk.success': true
+        'minitalk.message.id': savedMessage.id
       });
       rootSpan.setStatus({ code: 1 }); // OK
-
+       
     } catch (error) {
-      console.error('Send message error:', error);
-      // Add detailed error logging for WebSocket failures
-      console.error('🚨 WEBSOCKET MESSAGE FAILURE:');
+      console.error('Message processing error:', error);
+      console.error('🚨 MESSAGE PROCESSING FAILURE:');
       console.error('❌ Error Type:', error.name);
       console.error('❌ Error Message:', error.message);
-      console.error('❌ Stack Trace:', error.stack);
-      console.error('📊 User:', socket.userId);
-      console.error('📊 Socket ID:', socket.id);
-      console.error('📊 Data:', JSON.stringify(data, null, 2));
+      console.error('❌ User:', socket.userId);
+      console.error('❌ Socket ID:', socket.id);
       
       // Log memory usage during error
       const memUsage = process.memoryUsage();
@@ -361,9 +228,8 @@ const handleSocketConnection = (socket, io) => {
       console.error(`   Heap Used: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`);
       
       // Child span for error handling
-      const errorHandlingSpan = createChildSpan(rootSpan, 'error.handle_websocket_message', {
+      const errorSpan = createChildSpan(rootSpan, 'error.handle_message_processing', {
         'minitalk.error.type': error.name || 'UnknownError',
-        'minitalk.error.message': error.message,
         'minitalk.user': socket.userId,
         'minitalk.socket_id': socket.id,
         'minitalk.memory.rss_mb': Math.round(memUsage.rss / 1024 / 1024),
@@ -371,75 +237,75 @@ const handleSocketConnection = (socket, io) => {
       });
       
       try {
-        errorHandlingSpan.setAttributes({
-          'minitalk.error.stack': error.stack,
-          'minitalk.request.data': JSON.stringify(data)
+        errorSpan.setAttributes({
+          'minitalk.error.message': error.message,
+          'minitalk.error.stack': error.stack
         });
-        
-        // Check if this is a system overload error
-        if (error.message.includes('memory') || error.message.includes('heap') || 
-            error.message.includes('timeout') || error.message.includes('ECONNRESET') ||
-            error.name === 'RangeError' || error.name === 'TimeoutError') {
-          console.error('💀 CRITICAL: SYSTEM OVERLOAD DETECTED IN WEBSOCKET!');
-          
-          errorHandlingSpan.setAttributes({
-            'minitalk.system_overload': true,
-            'minitalk.failure_type': 'system_overload',
-            'minitalk.severity': 'critical'
-          });
-          
-          // Log as CRITICAL system error to OpenTelemetry
-          logCriticalSystemError(error, {
-            'minitalk.operation': 'send_message',
-            'minitalk.user': socket.userId,
-            'minitalk.system_overload': true,
-            'minitalk.failure_type': 'system_overload'
-          });
-        }
-        
-        // Child span for error response
-        const errorResponseSpan = createChildSpan(rootSpan, 'websocket.send_error_response', {
-          'minitalk.response.type': 'system_error'
-        });
-        
-        try {
-          socket.emit('error', { message: 'Internal server error' });
-          errorResponseSpan.setStatus({ code: 1 }); // OK
-        } finally {
-          errorResponseSpan.end();
-        }
-        
-        errorHandlingSpan.setStatus({ code: 2, message: error.message });
+        errorSpan.setStatus({ code: 2, message: error.message }); // ERROR
       } finally {
-        errorHandlingSpan.end();
+        errorSpan.end();
       }
       
-      rootSpan.setStatus({ code: 2, message: error.message });
+      // If it's a critical error, log as CRITICAL
+      if (error.message.includes('memory') || error.message.includes('heap') || 
+          error.name === 'RangeError' || error.name === 'Error' && error.message.includes('Maximum')) {
+        console.error('💀 CRITICAL: MEMORY-RELATED MESSAGE FAILURE!');
+        
+        // Log as CRITICAL system error to OpenTelemetry
+        logCriticalSystemError(error, {
+          'minitalk.operation': 'message_processing',
+          'minitalk.failure_type': 'memory_related',
+          'minitalk.user': socket.userId,
+          'minitalk.system_unstable': true
+        });
+      }
+      
+      rootSpan.setStatus({ code: 2, message: error.message }); // ERROR
       rootSpan.setAttributes({
-        'minitalk.error': true,
-        'minitalk.error.type': error.name || 'UnknownError'
+        'minitalk.message.error': true,
+        'minitalk.error.message': error.message
       });
+      
+      socket.emit('error', { message: 'Failed to send message' });
     } finally {
       rootSpan.end();
     }
   });
 
-  // Handle disconnection
-  socket.on('disconnect', (reason) => {
-    console.log(`User ${socket.userId} disconnected: ${reason}`);
-    
-    // Log to OpenTelemetry
-    const disconnectSpan = tracer.startSpan('websocket.disconnect', {
-      attributes: {
-        'minitalk.component': 'websocket',
-        'minitalk.user': socket.userId,
-        'minitalk.socket_id': socket.id,
-        'minitalk.disconnect.reason': reason
+  // Handle joining specific room
+  socket.on('join_room', async (data) => {
+    try {
+      const { roomId } = data;
+      const username = socket.userId;
+
+      // Verify user is participant of the room
+      const chatRoom = await dataManager.findChatRoomByRoomId(roomId);
+      if (!chatRoom || !chatRoom.participants.includes(username)) {
+        socket.emit('error', { message: 'You are not a member of this chat room' });
+        return;
       }
-    });
-    
-    disconnectSpan.setStatus({ code: 1 }); // OK
-    disconnectSpan.end();
+
+      socket.join(roomId);
+      socket.emit('joined_room', { roomId });
+      console.log(`User ${username} joined room ${roomId}`);
+
+    } catch (error) {
+      console.error('Join room error:', error);
+      socket.emit('error', { message: 'Failed to join room' });
+    }
+  });
+
+  // Handle leaving room
+  socket.on('leave_room', (data) => {
+    const { roomId } = data;
+    socket.leave(roomId);
+    socket.emit('left_room', { roomId });
+    console.log(`User ${socket.userId} left room ${roomId}`);
+  });
+
+  // Handle disconnect
+  socket.on('disconnect', () => {
+    console.log(`User ${socket.userId} disconnected`);
   });
 };
 
