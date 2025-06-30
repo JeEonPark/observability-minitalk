@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: loadtest
-        image: ghcr.io/jeeonpark/minitalk-loadtest:v6
+        image: ghcr.io/jeeonpark/minitalk-loadtest:v8
         resources:
           requests:
             memory: "1Gi"
