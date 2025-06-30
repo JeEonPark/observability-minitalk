@@ -20,7 +20,9 @@ kubectl exec -it minitalk-loadtest-7fdc87d54-45sqp -n jonny -- python new_year_l
 The identifier after minitalk-loadtest may change, so use tab for auto-completion.
 
 Note: The performance of this EKS environment is not very good, so the load test will run with lower numbers than actual performance.
-Only run the 1. Quick Bombing load test.
+Only run:
+ - 1. Tiny Bombing for latency
+ - 2, 3, 4, 5 for throughput
 
 ### Check in Frontend
 1. Access MinitalkChat in browser
