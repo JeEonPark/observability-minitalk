@@ -24,6 +24,38 @@ process.setMaxListeners(0); // Unlimited event listeners
 console.log('🚀 FAST HASH MODE ACTIVATED for load testing!');
 console.log('💥 INSANE PERFORMANCE MODE ACTIVATED!');
 
+// 🚀 NEW: Graceful shutdown handling for message buffers
+process.on('SIGTERM', async () => {
+  console.log('🔄 SIGTERM received, flushing message buffers...');
+  try {
+    await dataManager.flushAllBuffers();
+    console.log('✅ All message buffers flushed successfully');
+  } catch (error) {
+    console.error('❌ Error flushing message buffers:', error);
+  }
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('🔄 SIGINT received, flushing message buffers...');
+  try {
+    await dataManager.flushAllBuffers();
+    console.log('✅ All message buffers flushed successfully');
+  } catch (error) {
+    console.error('❌ Error flushing message buffers:', error);
+  }
+  process.exit(0);
+});
+
+// 🚀 NEW: Periodic buffer flush for safety (every 30 seconds)
+setInterval(async () => {
+  try {
+    await dataManager.flushAllBuffers();
+  } catch (error) {
+    console.error('❌ Error in periodic buffer flush:', error);
+  }
+}, 30000);
+
 // ========== CRITICAL ERROR MONITORING & ALERTING SYSTEM ==========
 // This is what was missing! We need to catch system-level failures!
 
@@ -34,7 +66,7 @@ process.on('uncaughtException', (error) => {
   console.error('❌ ERROR MESSAGE:', error.message);
   console.error('❌ STACK TRACE:', error.stack);
   console.error('💀 PROCESS WILL EXIT - SYSTEM OVERLOAD DETECTED!');
-  
+
   // Log memory usage at time of crash
   const memUsage = process.memoryUsage();
   console.error('📊 MEMORY AT CRASH:');
@@ -42,7 +74,7 @@ process.on('uncaughtException', (error) => {
   console.error(`   Heap Used: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`);
   console.error(`   Heap Total: ${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`);
   console.error(`   External: ${Math.round(memUsage.external / 1024 / 1024)}MB`);
-  
+
   // Log to Datadog APM as CRITICAL ERROR
   logCriticalSystemError(error, {
     'minitalk.crash_type': 'uncaught_exception',
@@ -50,7 +82,7 @@ process.on('uncaughtException', (error) => {
     'minitalk.memory.heap_used_mb': Math.round(memUsage.heapUsed / 1024 / 1024),
     'minitalk.process_will_exit': true
   });
-  
+
   // Exit gracefully after logging
   setTimeout(() => {
     process.exit(1);
@@ -63,16 +95,16 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ REASON:', reason);
   console.error('❌ PROMISE:', promise);
   console.error('💀 POTENTIAL SYSTEM OVERLOAD - INVESTIGATE IMMEDIATELY!');
-  
+
   // Log memory usage
   const memUsage = process.memoryUsage();
   console.error('📊 MEMORY AT REJECTION:');
   console.error(`   RSS: ${Math.round(memUsage.rss / 1024 / 1024)}MB`);
   console.error(`   Heap Used: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`);
-  
+
   // Create error object from reason if it's not already an error
   const error = reason instanceof Error ? reason : new Error(String(reason));
-  
+
   // Log to Datadog APM as CRITICAL ERROR
   logCriticalSystemError(error, {
     'minitalk.crash_type': 'unhandled_rejection',
@@ -88,7 +120,7 @@ setInterval(() => {
   const memUsage = process.memoryUsage();
   const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
   const rssMB = Math.round(memUsage.rss / 1024 / 1024);
-  
+
   // Warning thresholds
   if (heapUsedMB > 6000 || rssMB > 7000) { // 6GB heap or 7GB RSS
     memoryWarningCount++;
@@ -96,7 +128,7 @@ setInterval(() => {
     console.error(`⚠️  Heap Used: ${heapUsedMB}MB (Limit: ~8000MB)`);
     console.error(`⚠️  RSS: ${rssMB}MB`);
     console.error(`⚠️  Warning Count: ${memoryWarningCount}`);
-    
+
     // Log to Datadog APM as MEMORY ERROR
     const memoryError = new Error(`Memory usage approaching limits: Heap ${heapUsedMB}MB, RSS ${rssMB}MB`);
     logMemoryError(memoryError, {
@@ -105,10 +137,10 @@ setInterval(() => {
       'minitalk.memory.warning_count': memoryWarningCount,
       'minitalk.memory.threshold_exceeded': true
     });
-    
+
     if (memoryWarningCount > 5) {
       console.error('💀 CRITICAL: MEMORY WARNINGS EXCEEDED - SYSTEM UNSTABLE!');
-      
+
       // Log CRITICAL memory error to Datadog
       const criticalMemoryError = new Error(`Critical memory warnings exceeded: ${memoryWarningCount} warnings`);
       logCriticalSystemError(criticalMemoryError, {
@@ -128,21 +160,21 @@ let lastEventLoopLogTime = 0;
 
 function measureEventLoopLag() {
   const start = process.hrtime.bigint();
-  
+
   setImmediate(() => {
     const lag = Number(process.hrtime.bigint() - start) / 1000000; // Convert nanoseconds to milliseconds
-    
+
     // If event loop lag is over 100ms, we have a problem
     if (lag > 100) {
       eventLoopWarningCount++;
       const now = Date.now();
-      
+
       // 10초마다 한 번씩만 로깅 (스팸 방지)
       if (now - lastEventLoopLogTime > 10000) {
         console.error('🚨 EVENT LOOP LAG WARNING:');
         console.error(`⚠️  Lag: ${Math.round(lag)}ms (Normal: <10ms)`);
         console.error(`⚠️  Warning Count: ${eventLoopWarningCount}`);
-        
+
         // Log to Datadog APM as PERFORMANCE ERROR
         const lagError = new Error(`Event loop lag detected: ${Math.round(lag)}ms`);
         logCriticalSystemError(lagError, {
@@ -151,11 +183,11 @@ function measureEventLoopLag() {
           'minitalk.performance.warning_count': eventLoopWarningCount,
           'minitalk.category': 'performance_issue'
         });
-        
+
         if (lag > 1000) {
           console.error('💀 CRITICAL: EVENT LOOP BLOCKED - CPU OVERLOAD!');
         }
-        
+
         lastEventLoopLogTime = now;
       }
     } else {
@@ -164,7 +196,7 @@ function measureEventLoopLag() {
         eventLoopWarningCount = 0;
       }
     }
-    
+
     // Schedule next measurement
     setTimeout(measureEventLoopLag, 5000); // Check every 5 seconds
   });
@@ -206,16 +238,16 @@ const io = socketIo(server, {
 app.use(cors());
 
 // ULTRA LARGE payload limits for MEGA BATCH operations! 💪
-app.use(express.json({ 
+app.use(express.json({
   limit: '100mb',  // 100MB limit for massive batch requests!
   parameterLimit: 100000,  // Support for massive parameter counts
-  extended: true 
+  extended: true
 }));
 
-app.use(express.urlencoded({ 
+app.use(express.urlencoded({
   limit: '100mb',  // 100MB limit for URL encoded data too
   parameterLimit: 100000,
-  extended: true 
+  extended: true
 }));
 
 // Initialize file storage (replaces MongoDB connection)
@@ -232,7 +264,7 @@ app.get('/health', (req, res) => {
 
 app.get('/ready', (req, res) => {
   // Simple readiness check - if server is running, it's ready
-    res.json({ status: 'OK', message: 'MiniTalk Backend is ready' });
+  res.json({ status: 'OK', message: 'MiniTalk Backend is ready' });
 });
 
 // Socket.IO connection handling
@@ -247,17 +279,17 @@ io.engine.on('connection_error', (err) => {
   console.error('❌ Error Code:', err.code);
   console.error('❌ Error Message:', err.message);
   console.error('❌ Error Context:', err.context);
-  
+
   // Log memory usage during engine error
   const memUsage = process.memoryUsage();
   console.error('📊 Memory Usage at Engine Error:');
   console.error(`   RSS: ${Math.round(memUsage.rss / 1024 / 1024)}MB`);
   console.error(`   Heap Used: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`);
-  
+
   // Create error object for Datadog logging
   const engineError = new Error(`Socket.IO Engine Error: ${err.message || err.code}`);
   engineError.name = 'SocketIOEngineError';
-  
+
   // Log to OpenTelemetry as ERROR
   logCriticalSystemError(engineError, {
     'minitalk.operation': 'socketio_engine',
@@ -266,10 +298,10 @@ io.engine.on('connection_error', (err) => {
     'minitalk.memory.rss_mb': Math.round(memUsage.rss / 1024 / 1024),
     'minitalk.memory.heap_used_mb': Math.round(memUsage.heapUsed / 1024 / 1024)
   });
-  
+
   if (err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT') {
     console.error('💀 CRITICAL: NETWORK OVERLOAD DETECTED!');
-    
+
     // Log network overload as CRITICAL
     const networkError = new Error(`Network overload detected: ${err.code}`);
     logCriticalSystemError(networkError, {
@@ -284,11 +316,11 @@ io.engine.on('connection_error', (err) => {
 // Monitor Socket.IO connection count and warn on overload
 setInterval(() => {
   const connectedSockets = io.engine.clientsCount;
-  
+
   if (connectedSockets > 80000) { // 80% of our 100K limit
     console.error('🚨 SOCKET CONNECTION WARNING:');
     console.error(`⚠️  Connected Sockets: ${connectedSockets} (Limit: 100,000)`);
-    
+
     // Log socket overload warning to Datadog
     const socketWarning = new Error(`Socket connection approaching limit: ${connectedSockets}/100,000`);
     logCriticalSystemError(socketWarning, {
@@ -298,10 +330,10 @@ setInterval(() => {
       'minitalk.socket_warning': true,
       'minitalk.category': 'capacity_issue'
     });
-    
+
     if (connectedSockets > 95000) {
       console.error('💀 CRITICAL: SOCKET CONNECTION LIMIT APPROACHING!');
-      
+
       // Log critical socket overload to Datadog
       const criticalSocketError = new Error(`CRITICAL: Socket connection limit approaching: ${connectedSockets}/100,000`);
       logCriticalSystemError(criticalSocketError, {
@@ -313,7 +345,7 @@ setInterval(() => {
       });
     }
   }
-  
+
   // Also log current stats every 30 seconds if we have connections
   if (connectedSockets > 0) {
     console.log(`📊 Active Connections: ${connectedSockets}`);
