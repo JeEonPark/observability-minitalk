@@ -195,30 +195,24 @@ def ultra_bombing_process_global(process_id, socket_room_data, duration, msg_rat
         
         print(f"🔌 Process {process_id}: Connected {len(active_sockets)} sockets")
         
-        # Start bombing!
+        # Start bombing with proper rate limiting!
         while time.time() - start_time < duration:
             try:
-                # INSANE BATCH BOMBING!
-                batch_size = min(1000, len(active_sockets))
+                # Send one message at a time for proper rate control
+                sio, socket_info, room_info = random.choice(active_sockets)
+                message = random.choice(NEW_YEAR_MESSAGES)
                 
-                for _ in range(batch_size):
-                    try:
-                        # Random socket-room pair
-                        sio, socket_info, room_info = random.choice(active_sockets)
-                        message = random.choice(NEW_YEAR_MESSAGES)
-                        
-                        # FIRE!
-                        sio.emit("send_message", {
-                            "roomId": room_info["roomId"],
-                            "content": f"[P{process_id}] {message}"
-                        })
-                        
-                        local_count += 1
-                    except:
-                        pass  # Silent fail for maximum speed
+                # Send message
+                sio.emit("send_message", {
+                    "roomId": room_info["roomId"],
+                    "content": f"[P{process_id}] {message}"
+                })
                 
-                # NO DELAY FOR INSANE SPEED!
-                # time.sleep(0.001 / msg_rate)  # REMOVED FOR MAXIMUM SPEED!
+                local_count += 1
+                
+                # Proper rate limiting with sleep
+                sleep_time = 1.0 / msg_rate if msg_rate > 0 else 0.1
+                time.sleep(sleep_time)
                 
             except Exception as e:
                 pass  # Continue bombing even if some fail
@@ -1036,51 +1030,51 @@ class NewYearLoadTest:
         self.print_colored("💥💥💥 MEGA MESSAGE BOMBING ACTIVATED! 💥💥💥", Fore.MAGENTA)
         
         def ultra_fast_message_worker(worker_id: int):
-            """Ultra-fast message worker with minimal delays"""
+            """Ultra-fast message worker with proper rate limiting"""
             nonlocal message_count
             local_count = 0
             
+            # Calculate proper rate limiting
+            messages_per_worker = messages_per_second // num_threads if num_threads > 0 else messages_per_second
+            sleep_time = 1.0 / messages_per_worker if messages_per_worker > 0 else 0.1
+            
             while time.time() - start_time < duration_seconds:
                 try:
-                    # Batch send multiple messages at once for ULTRA SPEED! ⚡
-                    batch_size = min(500, len(socket_room_pairs))  # MASSIVE 500 messages per batch!
+                    # Send one message at a time for proper rate control
+                    socket_data, room = random.choice(socket_room_pairs)
+                    message = random.choice(NEW_YEAR_MESSAGES)
                     
-                    for _ in range(batch_size):
-                        # Random socket-room pair for maximum chaos! 💥
-                        socket_data, room = random.choice(socket_room_pairs)
-                        message = random.choice(NEW_YEAR_MESSAGES)
-                        
-                        # Fire and forget - no waiting! 🚀
-                        socket_data["socket"].emit("send_message", {
-                            "roomId": room["roomId"],
-                            "content": f"[Worker-{worker_id}] {message}"
-                        })
-                        
-                        local_count += 1
+                    # Send message
+                    socket_data["socket"].emit("send_message", {
+                        "roomId": room["roomId"],
+                        "content": f"[Worker-{worker_id}] {message}"
+                    })
+                    
+                    local_count += 1
                     
                     # Update global counter
                     with message_lock:
-                        message_count += batch_size
+                        message_count += 1
                         
-                        # Show progress every 10000 messages for MEGA SPEED stats! 📊
-                        if message_count % 10000 == 0:
+                        # Show progress every 1000 messages for stats
+                        if message_count % 1000 == 0:
                             elapsed = time.time() - start_time
                             rate = message_count / elapsed if elapsed > 0 else 0
                             self.print_colored(f"💥 BOMBED {message_count:,} messages ({rate:.0f}/sec) - Worker {worker_id} sent {local_count}", Fore.CYAN)
                 
                 except Exception as e:
-                    # Silent error handling for maximum speed
+                    # Silent error handling
                     pass
                 
-                # NO DELAY FOR INSANE SPEED! ⚡⚡⚡
-                # time.sleep(0.0001 / messages_per_second)  # REMOVED DELAY FOR MAXIMUM SPEED!
+                # Proper rate limiting with sleep
+                time.sleep(sleep_time)
         
-        # Start MASSIVE number of worker threads for MEGA BOMBING! 💥
+        # Start reasonable number of worker threads for proper rate limiting
         threads = []
-        # Use INSANE number of threads for maximum chaos! 🚀
-        num_threads = min(len(self.sockets), 1000)  # Up to 1000 parallel message bombers!
+        # Use reasonable number of threads for controlled bombing
+        num_threads = min(10, len(self.sockets))  # Max 10 threads for better control
         
-        self.print_colored(f"🚀 Launching {num_threads} MEGA MESSAGE BOMBERS!", Fore.MAGENTA)
+        self.print_colored(f"🚀 Launching {num_threads} CONTROLLED MESSAGE BOMBERS!", Fore.MAGENTA)
         
         for worker_id in range(num_threads):
             thread = threading.Thread(target=ultra_fast_message_worker, args=(worker_id,))
