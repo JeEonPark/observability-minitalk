@@ -1210,20 +1210,21 @@ def show_menu():
     print(f"{Fore.MAGENTA}💥🎊🎉 NEW YEAR ULTIMATE MESSAGE BOMBING TEST 🎉🎊💥")
     print(f"{Fore.MAGENTA}{'='*80}{Style.RESET_ALL}")
     print(f"\n{Fore.CYAN}Select your MESSAGE BOMBING level:")
-    print(f"{Fore.YELLOW}1. 🎯 Light Bombing (10 users, 5 rooms, 60s) - 50 msg/sec")
-    print(f"{Fore.YELLOW}2. 🚀 Quick Bombing (30 users, 10 rooms, 30s) - 1000 msg/sec")
-    print(f"{Fore.YELLOW}3. 🏃 Medium Bombing (100 users, 15 rooms, 60s) - 5000 msg/sec")
-    print(f"{Fore.YELLOW}4. 💪 Strong Bombing (500 users, 20 rooms, 120s) - 10000 msg/sec")
-    print(f"{Fore.YELLOW}5. 🔥 Extreme Bombing (1000 users, 25 rooms, 180s) - 20000 msg/sec")
-    print(f"{Fore.YELLOW}6. 🌟 Mega Bombing (5000 users, 30 rooms, 300s) - 50000 msg/sec")
-    print(f"{Fore.YELLOW}7. 💥 Ultra Bombing (10000 users, 35 rooms, 600s) - 100000 msg/sec")
-    print(f"{Fore.RED}8. 🔥 MULTIPROCESS INSANE (50000 users, 50 rooms, 900s) - 50000 msg/sec")
-    print(f"{Fore.RED}9. 💀 APOCALYPSE MODE (100000 users, 100 rooms, 1200s) - 100000 msg/sec")
-    print(f"{Fore.MAGENTA}10. 🌟 ASYNC MEGA PARALLEL (25000 users, 40 rooms, 600s) - 25000 msg/sec")
-    print(f"{Fore.YELLOW}11. 🎯 Custom Bombing Settings")
-    print(f"{Fore.YELLOW}12. 🧪 Connection Test Only (No bombing)")
+    print(f"{Fore.YELLOW}1. 🎯 Tiny Bombing (3 users, 2 rooms, 30s) - 10 msg/sec")
+    print(f"{Fore.YELLOW}2. 🚀 Light Bombing (10 users, 5 rooms, 60s) - 50 msg/sec")
+    print(f"{Fore.YELLOW}3. 🏃 Quick Bombing (30 users, 10 rooms, 30s) - 1000 msg/sec")
+    print(f"{Fore.YELLOW}4. 💪 Medium Bombing (100 users, 15 rooms, 60s) - 5000 msg/sec")
+    print(f"{Fore.YELLOW}5. 🔥 Strong Bombing (500 users, 20 rooms, 120s) - 10000 msg/sec")
+    print(f"{Fore.YELLOW}6. 🌟 Extreme Bombing (1000 users, 25 rooms, 180s) - 20000 msg/sec")
+    print(f"{Fore.YELLOW}7. 💥 Mega Bombing (5000 users, 30 rooms, 300s) - 50000 msg/sec")
+    print(f"{Fore.RED}8. 🔥 Ultra Bombing (10000 users, 35 rooms, 600s) - 100000 msg/sec")
+    print(f"{Fore.RED}9. 💀 MULTIPROCESS INSANE (50000 users, 50 rooms, 900s) - 50000 msg/sec")
+    print(f"{Fore.RED}10. 🌟 APOCALYPSE MODE (100000 users, 100 rooms, 1200s) - 100000 msg/sec")
+    print(f"{Fore.MAGENTA}11. 🌟 ASYNC MEGA PARALLEL (25000 users, 40 rooms, 600s) - 25000 msg/sec")
+    print(f"{Fore.YELLOW}12. 🎯 Custom Bombing Settings")
+    print(f"{Fore.YELLOW}13. 🧪 Connection Test Only (No bombing)")
     print(f"{Fore.RED}0. Exit")
-    print(f"\n{Fore.GREEN}💡 TIP: Options 8-10 use advanced multiprocessing/async for INSANE performance!")
+    print(f"\n{Fore.GREEN}💡 TIP: Options 9-11 use advanced multiprocessing/async for INSANE performance!")
     print(f"{Style.RESET_ALL}")
 
 def get_custom_settings():
@@ -1284,7 +1285,7 @@ def main():
         show_menu()
         
         try:
-            choice = input(f"{Fore.GREEN}Select your choice (0-12): {Style.RESET_ALL}").strip()
+            choice = input(f"{Fore.GREEN}Select your choice (0-13): {Style.RESET_ALL}").strip()
             
             if choice == "0":
                 print(f"{Fore.MAGENTA}🎊 Goodbye! 🎊{Style.RESET_ALL}")
@@ -1293,41 +1294,46 @@ def main():
             load_test = NewYearLoadTest()
             
             if choice == "1":
-                # Light bombing
-                print(f"\n{Fore.CYAN}🎯 Starting Light Message Bombing...")
-                load_test.run_full_test(10, 5, 60, 50)
+                # Tiny bombing
+                print(f"\n{Fore.CYAN}🎯 Starting Tiny Message Bombing...")
+                load_test.run_full_test(3, 2, 30, 10)
                 
             elif choice == "2":
-                # Quick bombing
-                print(f"\n{Fore.CYAN}🚀 Starting Quick Message Bombing...")
-                load_test.run_full_test(30, 10, 30, 1000)
+                # Light bombing
+                print(f"\n{Fore.CYAN}🚀 Starting Light Message Bombing...")
+                load_test.run_full_test(10, 5, 60, 50)
                 
             elif choice == "3":
-                # Medium bombing
-                print(f"\n{Fore.CYAN}🏃 Starting Medium Message Bombing...")
-                load_test.run_full_test(100, 15, 60, 5000)
+                # Quick bombing
+                print(f"\n{Fore.CYAN}🏃 Starting Quick Message Bombing...")
+                load_test.run_full_test(30, 10, 30, 1000)
                 
             elif choice == "4":
-                # Strong bombing
-                print(f"\n{Fore.CYAN}💪 Starting Strong Message Bombing...")
-                load_test.run_full_test(500, 20, 120, 10000)
+                # Medium bombing
+                print(f"\n{Fore.CYAN}💪 Starting Medium Message Bombing...")
+                load_test.run_full_test(100, 15, 60, 5000)
                 
             elif choice == "5":
-                # Extreme bombing
-                print(f"\n{Fore.CYAN}🔥 Starting Extreme Message Bombing...")
-                load_test.run_full_test(1000, 25, 180, 20000)
+                # Strong bombing
+                print(f"\n{Fore.CYAN}🔥 Starting Strong Message Bombing...")
+                load_test.run_full_test(500, 20, 120, 10000)
                 
             elif choice == "6":
-                # Mega bombing
-                print(f"\n{Fore.CYAN}🌟 Starting Mega Message Bombing...")
-                load_test.run_full_test(5000, 30, 300, 50000)
+                # Extreme bombing
+                print(f"\n{Fore.CYAN}🌟 Starting Extreme Message Bombing...")
+                load_test.run_full_test(1000, 25, 180, 20000)
                 
             elif choice == "7":
-                # Ultra bombing
-                print(f"\n{Fore.CYAN}💥 Starting Ultra Message Bombing...")
-                load_test.run_full_test(10000, 35, 600, 100000)
+                # Mega bombing
+                print(f"\n{Fore.CYAN}💥 Starting Mega Message Bombing...")
+                load_test.run_full_test(5000, 30, 300, 50000)
                 
             elif choice == "8":
+                # Ultra bombing
+                print(f"\n{Fore.CYAN}🔥 Starting Ultra Message Bombing...")
+                load_test.run_full_test(10000, 35, 600, 100000)
+                
+            elif choice == "9":
                 # MULTIPROCESS INSANE
                 print(f"\n{Fore.RED}🔥 Starting MULTIPROCESS INSANE BOMBING...")
                 print(f"{Fore.RED}⚠️ WARNING: This will use ALL CPU cores and create 50,000 users!")
@@ -1338,7 +1344,7 @@ def main():
                     print(f"{Fore.YELLOW}MULTIPROCESS INSANE cancelled.{Style.RESET_ALL}")
                     continue
                 
-            elif choice == "9":
+            elif choice == "10":
                 # APOCALYPSE MODE
                 print(f"\n{Fore.RED}💀 Starting APOCALYPSE MODE...")
                 print(f"{Fore.RED}🚨 EXTREME WARNING: This will create 100,000 users and may crash your system!")
@@ -1350,19 +1356,19 @@ def main():
                     print(f"{Fore.YELLOW}APOCALYPSE MODE cancelled.{Style.RESET_ALL}")
                     continue
                 
-            elif choice == "10":
+            elif choice == "11":
                 # ASYNC MEGA PARALLEL
                 print(f"\n{Fore.MAGENTA}🌟 Starting ASYNC MEGA PARALLEL BOMBING...")
                 print(f"{Fore.MAGENTA}💡 This uses async I/O for maximum efficiency!")
                 load_test.run_full_test(25000, 40, 600, 25000)
                 
-            elif choice == "11":
+            elif choice == "12":
                 # Custom bombing settings
                 users, rooms, duration, msg_rate = get_custom_settings()
                 print(f"\n{Fore.CYAN}🎯 Starting Custom Message Bombing...")
                 load_test.run_full_test(users, rooms, duration, msg_rate)
                 
-            elif choice == "12":
+            elif choice == "13":
                 # Connection test only
                 run_connection_test()
                 continue  # Don't wait for input, go back to menu
