@@ -23,8 +23,6 @@ process.setMaxListeners(0); // Unlimited event listeners
 
 console.log('🚀 FAST HASH MODE ACTIVATED for load testing!');
 console.log('💥 INSANE PERFORMANCE MODE ACTIVATED!');
-console.log(`🔥 Thread pool size: ${process.env.UV_THREADPOOL_SIZE}`);
-console.log(`💪 Memory limit: 8GB`);
 
 // ========== CRITICAL ERROR MONITORING & ALERTING SYSTEM ==========
 // This is what was missing! We need to catch system-level failures!
