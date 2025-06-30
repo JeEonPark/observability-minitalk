@@ -22,7 +22,7 @@ async function tracedDatabaseOperation(parentSpan, operationName, operation) {
     'minitalk.database.operation': operationName,
     'minitalk.component': 'database'
   });
-  
+
   try {
     const result = await operation();
     dbSpan.setStatus({ code: 1 }); // OK
@@ -52,7 +52,7 @@ function logWebSocketError(error, attributes = {}) {
       ...attributes
     }
   });
-  
+
   errorSpan.setStatus({ code: 2, message: error.message });
   errorSpan.end();
 }
@@ -68,7 +68,7 @@ function logCriticalSystemError(error, attributes = {}) {
       ...attributes
     }
   });
-  
+
   criticalSpan.setStatus({ code: 2, message: error.message });
   criticalSpan.end();
 }
@@ -83,13 +83,13 @@ const handleSocketConnection = (socket, io) => {
     console.error('❌ Error Message:', error.message);
     console.error('❌ User:', socket.userId);
     console.error('❌ Socket ID:', socket.id);
-    
+
     // Log memory usage during socket error
     const memUsage = process.memoryUsage();
     console.error('📊 Memory Usage at Socket Error:');
     console.error(`   RSS: ${Math.round(memUsage.rss / 1024 / 1024)}MB`);
     console.error(`   Heap Used: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`);
-    
+
     // Log to OpenTelemetry as ERROR
     logWebSocketError(error, {
       'minitalk.operation': 'socket_connection',
@@ -106,7 +106,7 @@ const handleSocketConnection = (socket, io) => {
     console.error('🚨 SOCKET CONNECT ERROR:');
     console.error('❌ Error:', error);
     console.error('❌ User:', socket.userId);
-    
+
     // Log to OpenTelemetry as ERROR
     logWebSocketError(error, {
       'minitalk.operation': 'socket_connect',
@@ -131,10 +131,10 @@ const handleSocketConnection = (socket, io) => {
         'minitalk.socket_id': socket.id
       }
     });
-    
+
     try {
       const { roomId, content } = data;
-      
+
       // Add message context to root span
       rootSpan.setAttributes({
         'minitalk.message.room_id': roomId,
@@ -149,7 +149,7 @@ const handleSocketConnection = (socket, io) => {
         'minitalk.validation.content_provided': !!content,
         'minitalk.validation.sender_provided': !!sender
       });
-      
+
       try {
         if (!roomId || !content || !sender) {
           const errorMsg = 'Missing required fields: roomId, content, or sender';
@@ -161,7 +161,7 @@ const handleSocketConnection = (socket, io) => {
           socket.emit('error', { message: errorMsg });
           return;
         }
-        
+
         validationSpan.setStatus({ code: 1 }); // OK
         validationSpan.setAttributes({
           'minitalk.validation.success': true
@@ -188,7 +188,7 @@ const handleSocketConnection = (socket, io) => {
         'minitalk.broadcast.room_id': roomId,
         'minitalk.broadcast.sender': sender
       });
-      
+
       try {
         io.to(roomId).emit('message', {
           type: 'message',
@@ -197,7 +197,7 @@ const handleSocketConnection = (socket, io) => {
           content: content,
           timestamp: savedMessage.timestamp
         });
-        
+
         broadcastSpan.setAttributes({
           'minitalk.broadcast.success': true,
           'minitalk.message.id': savedMessage.id
@@ -206,13 +206,13 @@ const handleSocketConnection = (socket, io) => {
       } finally {
         broadcastSpan.end();
       }
-      
+
       rootSpan.setAttributes({
         'minitalk.message.processed': true,
         'minitalk.message.id': savedMessage.id
       });
       rootSpan.setStatus({ code: 1 }); // OK
-       
+
     } catch (error) {
       console.error('Message processing error:', error);
       console.error('🚨 MESSAGE PROCESSING FAILURE:');
@@ -220,13 +220,13 @@ const handleSocketConnection = (socket, io) => {
       console.error('❌ Error Message:', error.message);
       console.error('❌ User:', socket.userId);
       console.error('❌ Socket ID:', socket.id);
-      
+
       // Log memory usage during error
       const memUsage = process.memoryUsage();
       console.error('📊 Memory Usage at Error:');
       console.error(`   RSS: ${Math.round(memUsage.rss / 1024 / 1024)}MB`);
       console.error(`   Heap Used: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`);
-      
+
       // Child span for error handling
       const errorSpan = createChildSpan(rootSpan, 'error.handle_message_processing', {
         'minitalk.error.type': error.name || 'UnknownError',
@@ -235,7 +235,7 @@ const handleSocketConnection = (socket, io) => {
         'minitalk.memory.rss_mb': Math.round(memUsage.rss / 1024 / 1024),
         'minitalk.memory.heap_used_mb': Math.round(memUsage.heapUsed / 1024 / 1024)
       });
-      
+
       try {
         errorSpan.setAttributes({
           'minitalk.error.message': error.message,
@@ -245,12 +245,12 @@ const handleSocketConnection = (socket, io) => {
       } finally {
         errorSpan.end();
       }
-      
+
       // If it's a critical error, log as CRITICAL
-      if (error.message.includes('memory') || error.message.includes('heap') || 
-          error.name === 'RangeError' || error.name === 'Error' && error.message.includes('Maximum')) {
+      if (error.message.includes('memory') || error.message.includes('heap') ||
+        error.name === 'RangeError' || error.name === 'Error' && error.message.includes('Maximum')) {
         console.error('💀 CRITICAL: MEMORY-RELATED MESSAGE FAILURE!');
-        
+
         // Log as CRITICAL system error to OpenTelemetry
         logCriticalSystemError(error, {
           'minitalk.operation': 'message_processing',
@@ -259,13 +259,13 @@ const handleSocketConnection = (socket, io) => {
           'minitalk.system_unstable': true
         });
       }
-      
+
       rootSpan.setStatus({ code: 2, message: error.message }); // ERROR
       rootSpan.setAttributes({
         'minitalk.message.error': true,
         'minitalk.error.message': error.message
       });
-      
+
       socket.emit('error', { message: 'Failed to send message' });
     } finally {
       rootSpan.end();

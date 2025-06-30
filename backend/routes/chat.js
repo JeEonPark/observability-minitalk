@@ -26,7 +26,7 @@ async function tracedDatabaseOperation(parentSpan, operationName, operation) {
     'minitalk.database.operation': operationName,
     'minitalk.component': 'database'
   });
-  
+
   try {
     const result = await operation();
     dbSpan.setStatus({ code: 1 }); // OK
@@ -52,7 +52,7 @@ function tracedValidation(parentSpan, validationName, validationFn) {
     'minitalk.validation.type': validationName,
     'minitalk.component': 'validation'
   });
-  
+
   try {
     const result = validationFn();
     validationSpan.setStatus({ code: 1 }); // OK
@@ -85,7 +85,7 @@ router.post('/chatrooms', authenticateToken, async (req, res) => {
       'minitalk.component': 'api'
     }
   });
-  
+
   try {
     const { name, participants = [] } = req.body;
     const createdBy = req.user.username;
@@ -100,7 +100,7 @@ router.post('/chatrooms', authenticateToken, async (req, res) => {
 
     // Child span 1: Input validation
     tracedValidation(rootSpan, 'chatroom_name', () => {
-    if (!name) {
+      if (!name) {
         throw new Error('Chat room name is required');
       }
       return true;
@@ -111,10 +111,10 @@ router.post('/chatrooms', authenticateToken, async (req, res) => {
       'minitalk.component': 'business_logic',
       'minitalk.participants.input_count': participants.length
     });
-    
+
     let allParticipants;
     try {
-    // Add creator to participants if not already included
+      // Add creator to participants if not already included
       allParticipants = [...new Set([createdBy, ...participants])];
       participantSpan.setAttributes({
         'minitalk.participants.final_count': allParticipants.length,
@@ -129,7 +129,7 @@ router.post('/chatrooms', authenticateToken, async (req, res) => {
     const idGenerationSpan = createChildSpan(rootSpan, 'business_logic.generate_room_id', {
       'minitalk.component': 'business_logic'
     });
-    
+
     let roomId;
     try {
       roomId = uuidv4();
@@ -145,11 +145,11 @@ router.post('/chatrooms', authenticateToken, async (req, res) => {
     // Child span 4: Database operation
     const chatRoom = await tracedDatabaseOperation(rootSpan, 'create_chatroom', async () => {
       return await dataManager.createChatRoom({
-      roomId,
-      name,
-      participants: allParticipants,
-      createdBy
-    });
+        roomId,
+        name,
+        participants: allParticipants,
+        createdBy
+      });
     });
 
     // Child span 5: Response formatting
@@ -157,7 +157,7 @@ router.post('/chatrooms', authenticateToken, async (req, res) => {
       'minitalk.component': 'response',
       'minitalk.response.status': 201
     });
-    
+
     let responseData;
     try {
       responseData = { roomId, name, participants: allParticipants };
@@ -182,13 +182,13 @@ router.post('/chatrooms', authenticateToken, async (req, res) => {
     res.status(201).json(responseData);
   } catch (error) {
     console.error('Create chatroom error:', error);
-    
+
     // Child span for error handling
     const errorSpan = createChildSpan(rootSpan, 'error.handle_create_chatroom', {
       'minitalk.component': 'error_handler',
       'minitalk.error.type': error.name || 'UnknownError'
     });
-    
+
     try {
       errorSpan.setAttributes({
         'minitalk.error.message': error.message,
@@ -276,10 +276,10 @@ router.get('/chatrooms', authenticateToken, async (req, res) => {
       'minitalk.component': 'api'
     }
   });
-  
+
   try {
     const username = req.user.username;
-    
+
     rootSpan.setAttributes({
       'minitalk.user': username
     });
@@ -294,17 +294,17 @@ router.get('/chatrooms', authenticateToken, async (req, res) => {
       'minitalk.component': 'business_logic',
       'minitalk.chatrooms.raw_count': chatRooms.length
     });
-    
+
     let formattedRooms;
     try {
       formattedRooms = chatRooms.map(room => ({
-      roomId: room.roomId,
-      name: room.name,
-      participants: room.participants,
-      createdBy: room.createdBy,
-      createdAt: room.createdAt
-    }));
-      
+        roomId: room.roomId,
+        name: room.name,
+        participants: room.participants,
+        createdBy: room.createdBy,
+        createdAt: room.createdAt
+      }));
+
       transformSpan.setAttributes({
         'minitalk.chatrooms.formatted_count': formattedRooms.length,
         'minitalk.transformation.success': true
@@ -319,7 +319,7 @@ router.get('/chatrooms', authenticateToken, async (req, res) => {
       'minitalk.component': 'response',
       'minitalk.response.status': 200
     });
-    
+
     try {
       responseSpan.setAttributes({
         'minitalk.response.chatrooms.count': formattedRooms.length,
@@ -340,13 +340,13 @@ router.get('/chatrooms', authenticateToken, async (req, res) => {
     res.json(formattedRooms);
   } catch (error) {
     console.error('Get chatrooms error:', error);
-    
+
     // Child span for error handling
     const errorSpan = createChildSpan(rootSpan, 'error.handle_get_chatrooms', {
       'minitalk.component': 'error_handler',
       'minitalk.error.type': error.name || 'UnknownError'
     });
-    
+
     try {
       errorSpan.setAttributes({
         'minitalk.error.message': error.message,
@@ -463,7 +463,7 @@ router.post('/chatrooms/:roomId/leave', authenticateToken, async (req, res) => {
 
     // Remove user from participants
     const updatedParticipants = chatRoom.participants.filter(participant => participant !== username);
-    
+
     // If no participants left, delete the room entirely
     if (updatedParticipants.length === 0) {
       await dataManager.deleteChatRoom(roomId);
@@ -489,13 +489,13 @@ router.delete('/messages/delete-all', authenticateToken, async (req, res) => {
 
     // Safety check - require confirmation code
     if (confirmationCode !== 'DELETE_ALL_MESSAGES_CONFIRM') {
-      return res.status(400).json({ 
-        error: 'Invalid confirmation code. This is a dangerous operation!' 
+      return res.status(400).json({
+        error: 'Invalid confirmation code. This is a dangerous operation!'
       });
     }
 
     console.log(`🚨 DANGER ZONE: Deleting ALL messages!`);
-    
+
     // Delete all messages using dataManager
     const result = await dataManager.deleteAllMessages();
 
