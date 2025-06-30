@@ -198,20 +198,23 @@ def ultra_bombing_process_global(process_id, socket_room_data, duration, msg_rat
         # Start bombing with proper rate limiting!
         while time.time() - start_time < duration:
             try:
-                # Send one message at a time for proper rate control
-                sio, socket_info, room_info = random.choice(active_sockets)
-                message = random.choice(NEW_YEAR_MESSAGES)
+                # Send small batch of messages for better performance
+                batch_size = max(1, min(5, msg_rate // 20))  # Small batches
                 
-                # Send message
-                sio.emit("send_message", {
-                    "roomId": room_info["roomId"],
-                    "content": f"[P{process_id}] {message}"
-                })
-                
-                local_count += 1
+                for _ in range(batch_size):
+                    sio, socket_info, room_info = random.choice(active_sockets)
+                    message = random.choice(NEW_YEAR_MESSAGES)
+                    
+                    # Send message
+                    sio.emit("send_message", {
+                        "roomId": room_info["roomId"],
+                        "content": f"[P{process_id}] {message}"
+                    })
+                    
+                    local_count += 1
                 
                 # Proper rate limiting with sleep
-                sleep_time = 1.0 / msg_rate if msg_rate > 0 else 0.1
+                sleep_time = batch_size / msg_rate if msg_rate > 0 else 0.1
                 time.sleep(sleep_time)
                 
             except Exception as e:
@@ -1034,27 +1037,32 @@ class NewYearLoadTest:
             nonlocal message_count
             local_count = 0
             
-            # Calculate proper rate limiting
-            messages_per_worker = messages_per_second // num_threads if num_threads > 0 else messages_per_second
+            # Calculate proper rate limiting - total rate divided by threads
+            total_target_rate = messages_per_second
+            messages_per_worker = total_target_rate // num_threads if num_threads > 0 else total_target_rate
             sleep_time = 1.0 / messages_per_worker if messages_per_worker > 0 else 0.1
+            
+            # Use small batches for better performance
+            batch_size = max(1, min(10, messages_per_worker // 10))  # Small batches
             
             while time.time() - start_time < duration_seconds:
                 try:
-                    # Send one message at a time for proper rate control
-                    socket_data, room = random.choice(socket_room_pairs)
-                    message = random.choice(NEW_YEAR_MESSAGES)
-                    
-                    # Send message
-                    socket_data["socket"].emit("send_message", {
-                        "roomId": room["roomId"],
-                        "content": f"[Worker-{worker_id}] {message}"
-                    })
-                    
-                    local_count += 1
+                    # Send small batch of messages
+                    for _ in range(batch_size):
+                        socket_data, room = random.choice(socket_room_pairs)
+                        message = random.choice(NEW_YEAR_MESSAGES)
+                        
+                        # Send message
+                        socket_data["socket"].emit("send_message", {
+                            "roomId": room["roomId"],
+                            "content": f"[Worker-{worker_id}] {message}"
+                        })
+                        
+                        local_count += 1
                     
                     # Update global counter
                     with message_lock:
-                        message_count += 1
+                        message_count += batch_size
                         
                         # Show progress every 1000 messages for stats
                         if message_count % 1000 == 0:
@@ -1071,8 +1079,14 @@ class NewYearLoadTest:
         
         # Start reasonable number of worker threads for proper rate limiting
         threads = []
-        # Use reasonable number of threads for controlled bombing
-        num_threads = min(10, len(self.sockets))  # Max 10 threads for better control
+        # Use more threads for higher message rates
+        base_threads = min(20, len(self.sockets))  # Base 20 threads
+        if messages_per_second > 1000:
+            num_threads = min(50, len(self.sockets))  # More threads for high rates
+        elif messages_per_second > 100:
+            num_threads = min(30, len(self.sockets))  # Medium threads for medium rates
+        else:
+            num_threads = base_threads  # Base threads for low rates
         
         self.print_colored(f"🚀 Launching {num_threads} CONTROLLED MESSAGE BOMBERS!", Fore.MAGENTA)
         
