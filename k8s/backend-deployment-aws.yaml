@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: ghcr.io/jeeonpark/minitalk-backend:main
+        image: ghcr.io/jeeonpark/minitalk-backend:final-issue-solution-test
         imagePullPolicy: Always
         ports:
         - containerPort: 4000
